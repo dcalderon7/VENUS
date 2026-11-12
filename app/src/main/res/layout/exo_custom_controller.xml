@@ -1,0 +1,310 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#20000000">
+
+    <!-- TOP BAR -->
+    <LinearLayout
+        android:id="@+id/topBar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="12dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <ImageButton
+            android:id="@+id/btnClose"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Regresar"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_arrow_back"
+            app:tint="@color/player_cyan" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="12dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/txtVideoTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/player_cyan"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                tools:text="Pelicula VENUS" />
+
+            <TextView
+                android:id="@+id/txtEpisodeSubtitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/player_cyan"
+                android:textSize="12sp"
+                android:visibility="gone"
+                tools:text="Subtitulo" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- GIANT CENTER PLAY/PAUSE (REFERENCIA OFICIAL CELESTE) -->
+    <ImageButton
+        android:id="@+id/exo_play_pause"
+        android:layout_width="88dp"
+        android:layout_height="88dp"
+        android:background="@android:color/transparent"
+        android:contentDescription="Reproducir o pausar"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_pause_white"
+        app:tint="@color/player_cyan"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- LIVE CHAT OVERLAY (ESTILO YOUTUBE LIVE EN SALAS INTERACTIVAS) -->
+    <LinearLayout
+        android:id="@+id/liveChatContainer"
+        android:layout_width="260dp"
+        android:layout_height="180dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="8dp"
+        android:background="#B0111015"
+        android:orientation="vertical"
+        android:padding="8dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@id/bottomBar"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="CHAT EN VIVO"
+            android:textColor="@color/player_cyan"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:paddingBottom="4dp" />
+
+        <ScrollView
+            android:id="@+id/scrollLiveChat"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:overScrollMode="never">
+
+            <LinearLayout
+                android:id="@+id/liveChatMessagesList"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+        </ScrollView>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingTop="4dp">
+
+            <EditText
+                android:id="@+id/inputLiveChatMsg"
+                android:layout_width="0dp"
+                android:layout_height="32dp"
+                android:layout_weight="1"
+                android:background="#40FFFFFF"
+                android:hint="Escribe un mensaje..."
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#B9B2C9"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/btnSendLiveChatMsg"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:layout_marginStart="6dp"
+                android:gravity="center"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:text="ENVIAR"
+                android:textColor="@color/player_cyan"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- BOTTOM BAR & SCRUBBER -->
+    <LinearLayout
+        android:id="@+id/bottomBar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="12dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="8dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <!-- SCRUBBER PROGRESS BAR (CELESTE / CYAN) -->
+        <androidx.media3.ui.DefaultTimeBar
+            android:id="@+id/exo_progress"
+            android:layout_width="match_parent"
+            android:layout_height="24dp"
+            app:bar_height="3dp"
+            app:buffered_color="#6600A8FF"
+            app:played_color="@color/player_cyan"
+            app:scrubber_color="@color/player_cyan"
+            app:scrubber_disabled_size="0dp"
+            app:scrubber_dragged_size="10dp"
+            app:scrubber_enabled_size="8dp"
+            app:touch_target_height="32dp"
+            app:unplayed_color="#55555555" />
+
+        <!-- BOTTOM CONTROLS ROW (FIEL A LA REFERENCIA VISUAL CELESTE) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingTop="2dp">
+
+            <!-- Small Play/Pause -->
+            <ImageButton
+                android:id="@+id/exo_play_pause_small"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginEnd="16dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Play o Pause"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_pause_white"
+                app:tint="@color/player_cyan" />
+
+            <!-- Rewind 10s -->
+            <ImageButton
+                android:id="@+id/exo_rew"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginEnd="16dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Retroceder 10 segundos"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_rewind_10"
+                app:tint="@color/player_cyan" />
+
+            <!-- Forward 10s -->
+            <ImageButton
+                android:id="@+id/exo_ffwd"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginEnd="16dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Adelantar 10 segundos"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_forward_10"
+                app:tint="@color/player_cyan" />
+
+            <!-- Volume Button -->
+            <ImageButton
+                android:id="@+id/btnVolume"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginEnd="12dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Volumen"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_volume"
+                app:tint="@color/player_cyan" />
+
+            <!-- Time Position / Duration: 00:05 / 1:45:02 -->
+            <TextView
+                android:id="@+id/txtTimeFormatted"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/player_cyan"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                tools:text="00:05 / 1:45:02" />
+
+            <!-- Hidden Default Exo Time Views for Media3 controller logic -->
+            <TextView
+                android:id="@+id/exo_position"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/exo_duration"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone" />
+
+            <!-- SPACER -->
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <!-- Settings (Gear) Button -->
+            <ImageButton
+                android:id="@+id/btnSettings"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginEnd="16dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Configuracion"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_settings"
+                app:tint="@color/player_cyan" />
+
+            <!-- Cast / Screen Mirroring Button -->
+            <ImageButton
+                android:id="@+id/btnCast"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginEnd="16dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Transmitir o Pantalla Inalambrica"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_cast"
+                app:tint="@color/player_cyan" />
+
+            <!-- Fullscreen / Resize / PIP Exit Button -->
+            <ImageButton
+                android:id="@+id/btnFullscreen"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Pantalla completa"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_fullscreen_white"
+                app:tint="@color/player_cyan" />
+
+        </LinearLayout>
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

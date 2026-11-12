@@ -1,0 +1,47 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+Venus.cloudflare.local.ps1
+cloudflare-worker/.wrangler/
+
+# Archivos privados y credenciales
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.test.example
+Venus.cloudflare.local.ps1
+
+# Archivos generados
+**/node_modules/
+**/uploads/
+**/dist/
+**/coverage/
+*.log
+
+# Certificados y claves privadas
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.key
+
+
+.idea/
+.artifacts/
+
+URLs_VENUS.txt

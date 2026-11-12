@@ -1,0 +1,24 @@
+﻿{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "venus",
+  "main": "src/index.js",
+  "compatibility_date": "2025-01-01",
+  "workers_dev": true,
+  "kv_namespaces": [
+    {
+      "binding": "VENUS_CONFIG",
+      "id": "95b6bea108e345abb48cb65a02bcf263"
+    }
+  ],
+  "assets": {
+    "directory": "../../VenusWeb/dist",
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/api/*",
+      "/__admin/*"
+    ],
+    "not_found_handling": "single-page-application"
+  }
+}
+
+

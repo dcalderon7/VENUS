@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/venus_background"
+    android:fitsSystemWindows="true">
+
+    <!-- PlayerView de Media3 -->
+    <androidx.media3.ui.PlayerView
+        android:id="@+id/playerView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/venus_background"
+        android:focusable="true"
+        android:descendantFocusability="afterDescendants" />
+
+    <!-- Overlay custom: título + controles mínimos -->
+    <LinearLayout
+        android:id="@+id/overlayControls"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="@android:color/transparent">
+
+        <!-- Header: título + botón cerrar -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/txtTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Video"
+                android:textColor="@color/venus_text"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:ellipsize="end"
+                android:maxLines="1" />
+
+            <ImageView
+                android:id="@+id/btnClose"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:src="@drawable/ic_close"
+                android:contentDescription="Cerrar reproductor"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:padding="12dp"
+                android:scaleType="centerInside" />
+
+        </LinearLayout>
+
+        <!-- Spacer -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <!-- Centro: botón play/pause + loading -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:layout_marginBottom="100dp">
+
+            <ProgressBar
+                android:id="@+id/progressBuffer"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:indeterminate="true"
+                android:visibility="gone"
+                android:theme="@style/ThemeOverlay.Venus.Player.Progress" />
+
+            <ImageView
+                android:id="@+id/btnPlayPause"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:src="@drawable/ic_play"
+                android:contentDescription="Reproducir / Pausar"
+                android:background="@drawable/bg_circular_venus_red"
+                android:padding="16dp"
+                android:scaleType="centerInside" />
+
+        </FrameLayout>
+
+    </LinearLayout>
+
+</FrameLayout>

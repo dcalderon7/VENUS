@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="venus_background">#050505</color>
+    <color name="venus_surface">#111015</color>
+    <color name="venus_surface_variant">#171321</color>
+    <color name="venus_card">#171321</color>
+    <color name="venus_purple_primary">#8738F5</color>
+    <color name="venus_purple_secondary">#A855F7</color>
+    <color name="venus_purple_light">#C4B5FD</color>
+    <color name="venus_red">#8738F5</color>
+    <color name="venus_red_pressed">#A855F7</color>
+    <color name="venus_text">#FFFFFF</color>
+    <color name="venus_text_secondary">#B9B2C9</color>
+    <color name="venus_border">#30283D</color>
+    <color name="venus_success">#00C853</color>
+    <color name="player_cyan">#00A8FF</color>
+</resources>

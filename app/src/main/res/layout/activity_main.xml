@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/venus_background">
+
+    <!-- Encabezado de VENUS -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:gravity="center_vertical"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:orientation="horizontal"
+        android:background="@color/venus_background">
+
+        <!-- Logo con triángulo morado -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:src="@drawable/ic_play"
+                android:layout_marginEnd="6dp"
+                app:tint="#8738F5"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="VENUS"
+                android:textColor="@color/venus_text"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.08" />
+
+        </LinearLayout>
+
+        <!-- Icono de Búsqueda superior -->
+        <ImageView
+            android:id="@+id/btnSearchTop"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:padding="8dp"
+            android:src="@drawable/ic_search"
+            app:tint="@color/venus_text"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:focusable="true"
+            android:layout_marginEnd="12dp"
+            android:contentDescription="Buscar" />
+
+        <!-- Avatar de Perfil -->
+        <TextView
+            android:id="@+id/txtProfile"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:gravity="center"
+            android:text="V"
+            android:textColor="@color/venus_text"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:background="@drawable/profile_background"
+            android:clickable="true"
+            android:focusable="true"
+            android:contentDescription="Abrir perfil" />
+
+    </LinearLayout>
+
+    <!-- Pantallas dinámicas -->
+    <FrameLayout
+        android:id="@+id/contentContainer"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <!-- Navegación inferior (Inicio, Explorar, Watch Party, Mi Lista, Biblioteca, Perfil) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="68dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:background="@color/venus_surface"
+        android:elevation="8dp">
+
+        <LinearLayout
+            android:id="@+id/navHome"
+            style="@style/VenusNavigation">
+
+            <ImageView
+                android:id="@+id/navHomeIcon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_venus_home"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:id="@+id/navHomeLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Inicio"
+                android:textSize="11sp"
+                android:layout_marginTop="4dp" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/navExplore"
+            style="@style/VenusNavigation">
+
+            <ImageView
+                android:id="@+id/navExploreIcon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_venus_explore"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:id="@+id/navExploreLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Explorar"
+                android:textSize="11sp"
+                android:layout_marginTop="4dp" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/navWatchParty"
+            style="@style/VenusNavigation">
+
+            <ImageView
+                android:id="@+id/navWatchPartyIcon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_cast"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:id="@+id/navWatchPartyLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Watch Party"
+                android:textSize="11sp"
+                android:layout_marginTop="4dp" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/navMyList"
+            style="@style/VenusNavigation">
+
+            <ImageView
+                android:id="@+id/navMyListIcon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_bookmark"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:id="@+id/navMyListLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Mi Lista"
+                android:textSize="11sp"
+                android:layout_marginTop="4dp" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/navLibrary"
+            style="@style/VenusNavigation">
+
+            <ImageView
+                android:id="@+id/navLibraryIcon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_film_reel"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:id="@+id/navLibraryLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Biblioteca"
+                android:textSize="11sp"
+                android:layout_marginTop="4dp" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/navProfile"
+            style="@style/VenusNavigation">
+
+            <ImageView
+                android:id="@+id/navProfileIcon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_user"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:id="@+id/navProfileLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Perfil"
+                android:textSize="11sp"
+                android:layout_marginTop="4dp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</LinearLayout>
