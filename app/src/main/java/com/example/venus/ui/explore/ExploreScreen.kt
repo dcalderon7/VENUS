@@ -17,7 +17,7 @@ import java.util.concurrent.Executors
 class ExploreScreen(private val activity: MainActivity) {
 
     fun mostrarExplorar() {
-        activity.seleccionarNavegacion(1)
+        activity.seleccionarNavegacion(-1)
         val pantalla = activity.prepararPantalla()
 
         activity.etiqueta(pantalla, "Catálogo completo y buscador")

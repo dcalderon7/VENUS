@@ -154,11 +154,36 @@ object WatchPartyDialogs {
         bottomSheet.show()
     }
 
+    fun obtenerIdUsuarioActual(context: Context): String {
+        try {
+            val securePrefs = context.getSharedPreferences("venus_secure_prefs", Context.MODE_PRIVATE)
+            val token = securePrefs.getString("jwt_token", null)
+            if (!token.isNullOrBlank() && token.contains(".")) {
+                val parts = token.split(".")
+                if (parts.size >= 2) {
+                    val payloadBytes = android.util.Base64.decode(
+                        parts[1],
+                        android.util.Base64.URL_SAFE or android.util.Base64.NO_PADDING or android.util.Base64.NO_WRAP
+                    )
+                    val payloadJson = org.json.JSONObject(String(payloadBytes, Charsets.UTF_8))
+                    val idFromJwt = payloadJson.optString("userId", payloadJson.optString("id", payloadJson.optString("sub", "")))
+                    if (idFromJwt.isNotBlank()) {
+                        return idFromJwt
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("VenusUser", "Error extrayendo userId del token JWT", e)
+        }
+
+        val localPrefs = context.getSharedPreferences("venus_local_media", Context.MODE_PRIVATE)
+        return localPrefs.getString("active_user_id", "") ?: ""
+    }
+
     fun mostrarMenuWatchParty(context: Context, onRoomJoined: ((WatchPartyRoomState) -> Unit)? = null) {
         val wsManager = VenusWebSocketManager.getInstance(context)
         val room = wsManager.currentRoomState.value
-        val prefs = context.getSharedPreferences("venus_local_media", Context.MODE_PRIVATE)
-        val currentUserId = prefs.getString("active_user_id", "") ?: ""
+        val currentUserId = obtenerIdUsuarioActual(context)
 
         val bottomSheet = BottomSheetDialog(context)
         val layout = LinearLayout(context).apply {

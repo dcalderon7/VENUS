@@ -3,7 +3,6 @@ package com.example.venus.ui.details
 import android.graphics.Color
 import android.graphics.Typeface
 import android.view.Gravity
-import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -13,7 +12,6 @@ import com.example.venus.BuildConfig
 import com.example.venus.MainActivity
 import com.example.venus.R
 import com.example.venus.models.PeliculaMock
-import com.example.venus.ui.dialogs.WatchPartyDialogs
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
@@ -174,14 +172,14 @@ object VenusDetails {
             setTextColor(activity.blanco)
             setTypeface(null, Typeface.BOLD)
             gravity = Gravity.CENTER
-            setPadding(activity.dp(6), activity.dp(10), activity.dp(6), activity.dp(10))
+            setPadding(activity.dp(6), activity.dp(12), activity.dp(6), activity.dp(12))
             background = activity.fondoRedondeado(if (estaDescargado) Color.rgb(30, 100, 200) else activity.superficie2, 12)
             layoutParams = LinearLayout.LayoutParams(
                 0,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 1f
             ).apply {
-                marginEnd = activity.dp(6)
+                marginStart = activity.dp(6)
             }
             isClickable = true
             isFocusable = true
@@ -197,40 +195,9 @@ object VenusDetails {
             }
         }
 
-        val btnWatchParty = TextView(activity).apply {
-            text = "WATCH PARTY"
-            textSize = 12f
-            setTextColor(activity.blanco)
-            setTypeface(null, Typeface.BOLD)
-            gravity = Gravity.CENTER
-            setPadding(activity.dp(6), activity.dp(10), activity.dp(6), activity.dp(10))
-            background = activity.fondoRedondeado(Color.rgb(135, 56, 245), 12)
-            layoutParams = LinearLayout.LayoutParams(
-                0,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                1f
-            )
-            isClickable = true
-            isFocusable = true
-            setOnClickListener {
-                bottomSheetDialog.dismiss()
-                WatchPartyDialogs.mostrarDialogoSalaCreadaConCodigo(
-                    context = activity,
-                    mediaId = pelicula.id,
-                    title = pelicula.titulo,
-                    onStartPlayer = {
-                        val token = activity.repository.getToken() ?: ""
-                        val streamUrl = "${com.example.venus.network.ApiClient.getBaseUrl(activity)}media/${pelicula.id}/stream?token=$token"
-                        activity.reproducirUrlServidor(pelicula.id, streamUrl, pelicula.titulo, pelicula.id, "movie")
-                    }
-                )
-            }
-        }
-
         containerAcciones.addView(btnPlay)
         filaSecundaria.addView(btnLista)
         filaSecundaria.addView(btnDescargar)
-        filaSecundaria.addView(btnWatchParty)
         containerAcciones.addView(filaSecundaria)
 
         vistaSheet.addView(headerRow, activity.margenAbajo(14))

@@ -6,8 +6,9 @@
     android:orientation="vertical"
     android:background="@color/venus_background">
 
-    <!-- Encabezado de VENUS -->
+    <!-- Encabezado Superior de VENUS (Logo + Buscar + Perfil) -->
     <LinearLayout
+        android:id="@+id/topHeaderLayout"
         android:layout_width="match_parent"
         android:layout_height="64dp"
         android:gravity="center_vertical"
@@ -16,7 +17,7 @@
         android:orientation="horizontal"
         android:background="@color/venus_background">
 
-        <!-- Logo con triángulo morado -->
+        <!-- Logo VENUS con icono neón -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -25,10 +26,10 @@
             android:orientation="horizontal">
 
             <ImageView
-                android:layout_width="22dp"
-                android:layout_height="22dp"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
                 android:src="@drawable/ic_play"
-                android:layout_marginEnd="6dp"
+                android:layout_marginEnd="8dp"
                 app:tint="#8738F5"
                 android:contentDescription="@null" />
 
@@ -43,21 +44,40 @@
 
         </LinearLayout>
 
-        <!-- Icono de Búsqueda superior -->
-        <ImageView
+        <!-- Botón de Búsqueda / Explorar Superior (Pill estilizado) -->
+        <LinearLayout
             android:id="@+id/btnSearchTop"
-            android:layout_width="38dp"
+            android:layout_width="wrap_content"
             android:layout_height="38dp"
-            android:padding="8dp"
-            android:src="@drawable/ic_search"
-            app:tint="@color/venus_text"
-            android:background="?attr/selectableItemBackgroundBorderless"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="12dp"
+            android:paddingEnd="14dp"
+            android:background="@drawable/bg_top_search"
             android:clickable="true"
             android:focusable="true"
-            android:layout_marginEnd="12dp"
-            android:contentDescription="Buscar" />
+            android:layout_marginEnd="10dp"
+            android:contentDescription="Buscar películas y series">
 
-        <!-- Avatar de Perfil -->
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:src="@drawable/ic_search"
+                app:tint="#C4B5FD"
+                android:layout_marginEnd="6dp"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Buscar"
+                android:textColor="#C4B5FD"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+        </LinearLayout>
+
+        <!-- Botón Avatar de Perfil Superior -->
         <TextView
             android:id="@+id/txtProfile"
             android:layout_width="38dp"
@@ -81,7 +101,7 @@
         android:layout_height="0dp"
         android:layout_weight="1" />
 
-    <!-- Navegación inferior (Inicio, Explorar, Watch Party, Mi Lista, Biblioteca, Perfil) -->
+    <!-- Navegación inferior estilizada (Inicio, Watch Party, Mi Lista, Biblioteca) -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="68dp"
@@ -106,27 +126,6 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Inicio"
-                android:textSize="11sp"
-                android:layout_marginTop="4dp" />
-
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/navExplore"
-            style="@style/VenusNavigation">
-
-            <ImageView
-                android:id="@+id/navExploreIcon"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@drawable/ic_venus_explore"
-                android:contentDescription="@null" />
-
-            <TextView
-                android:id="@+id/navExploreLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Explorar"
                 android:textSize="11sp"
                 android:layout_marginTop="4dp" />
 
@@ -190,27 +189,6 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Biblioteca"
-                android:textSize="11sp"
-                android:layout_marginTop="4dp" />
-
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/navProfile"
-            style="@style/VenusNavigation">
-
-            <ImageView
-                android:id="@+id/navProfileIcon"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@drawable/ic_user"
-                android:contentDescription="@null" />
-
-            <TextView
-                android:id="@+id/navProfileLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Perfil"
                 android:textSize="11sp"
                 android:layout_marginTop="4dp" />
 

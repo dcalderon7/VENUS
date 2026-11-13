@@ -81,7 +81,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <!-- LIVE CHAT OVERLAY (ESTILO YOUTUBE LIVE EN SALAS INTERACTIVAS) -->
+    <!-- LIVE CHAT OVERLAY -->
     <LinearLayout
         android:id="@+id/liveChatContainer"
         android:layout_width="260dp"

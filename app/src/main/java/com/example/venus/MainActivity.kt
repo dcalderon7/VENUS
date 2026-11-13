@@ -126,35 +126,27 @@ class MainActivity : AppCompatActivity() {
 
         content = findViewById(R.id.contentContainer)
 
-        findViewById<View>(R.id.navHome).setOnClickListener {
+        findViewById<View>(R.id.navHome)?.setOnClickListener {
             mostrarInicio()
         }
 
-        findViewById<View>(R.id.navExplore).setOnClickListener {
-            mostrarExplorar()
-        }
-
-        findViewById<View>(R.id.navWatchParty).setOnClickListener {
+        findViewById<View>(R.id.navWatchParty)?.setOnClickListener {
             mostrarWatchPartyScreen()
         }
 
-        findViewById<View>(R.id.navMyList).setOnClickListener {
+        findViewById<View>(R.id.navMyList)?.setOnClickListener {
             mostrarMiLista()
         }
 
-        findViewById<View>(R.id.navLibrary).setOnClickListener {
+        findViewById<View>(R.id.navLibrary)?.setOnClickListener {
             mostrarMiBibliotecaIndependiente()
         }
 
-        findViewById<View>(R.id.navProfile).setOnClickListener {
-            mostrarPerfil()
-        }
-
-        findViewById<View>(R.id.btnSearchTop).setOnClickListener {
+        findViewById<View>(R.id.btnSearchTop)?.setOnClickListener {
             mostrarExplorar()
         }
 
-        findViewById<View>(R.id.txtProfile).setOnClickListener {
+        findViewById<View>(R.id.txtProfile)?.setOnClickListener {
             mostrarPerfil()
         }
 
@@ -414,21 +406,26 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    fun mostrarTopHeader(visible: Boolean) {
+        findViewById<View>(R.id.topHeaderLayout)?.visibility = if (visible) View.VISIBLE else View.GONE
+    }
+
     @androidx.media3.common.util.UnstableApi
     fun mostrarWatchPartyScreen() {
+        mostrarTopHeader(false)
         com.example.venus.ui.watchparty.WatchPartyScreen(this).mostrarWatchPartyScreen()
     }
 
     internal fun seleccionarNavegacion(seleccionado: Int) {
-        val iconos = listOf(R.id.navHomeIcon, R.id.navExploreIcon, R.id.navWatchPartyIcon, R.id.navMyListIcon, R.id.navLibraryIcon, R.id.navProfileIcon)
-        val etiquetas = listOf(R.id.navHomeLabel, R.id.navExploreLabel, R.id.navWatchPartyLabel, R.id.navMyListLabel, R.id.navLibraryLabel, R.id.navProfileLabel)
+        val iconos = listOf(R.id.navHomeIcon, R.id.navWatchPartyIcon, R.id.navMyListIcon, R.id.navLibraryIcon)
+        val etiquetas = listOf(R.id.navHomeLabel, R.id.navWatchPartyLabel, R.id.navMyListLabel, R.id.navLibraryLabel)
 
         iconos.forEachIndexed { indice, id ->
-            findViewById<ImageView>(id).setColorFilter(if (indice == seleccionado) rojo else gris)
+            findViewById<ImageView>(id)?.setColorFilter(if (indice == seleccionado) rojo else gris)
         }
 
         etiquetas.forEachIndexed { indice, id ->
-            findViewById<TextView>(id).apply {
+            findViewById<TextView>(id)?.apply {
                 setTextColor(if (indice == seleccionado) rojo else gris)
                 setTypeface(null, if (indice == seleccionado) Typeface.BOLD else Typeface.NORMAL)
             }
@@ -827,30 +824,37 @@ class MainActivity : AppCompatActivity() {
     }
 
     internal fun mostrarInicio() {
+        mostrarTopHeader(true)
         HomeScreen(this).mostrarInicio()
     }
 
     internal fun mostrarExplorar() {
+        mostrarTopHeader(true)
         ExploreScreen(this).mostrarExplorar()
     }
 
     internal fun mostrarMiLista() {
+        mostrarTopHeader(true)
         MyListScreen(this).mostrarMiLista()
     }
 
     internal fun mostrarDescargas() {
+        mostrarTopHeader(true)
         LibraryScreens(this).mostrarDescargas()
     }
 
     internal fun mostrarBiblioteca() {
+        mostrarTopHeader(true)
         LibraryScreens(this).mostrarBiblioteca()
     }
 
     internal fun mostrarPerfil() {
+        mostrarTopHeader(true)
         ProfileScreen(this).mostrarPerfil()
     }
 
     internal fun mostrarMiBibliotecaIndependiente() {
+        mostrarTopHeader(true)
         LibraryScreens(this).mostrarMiBibliotecaIndependiente()
     }
 
