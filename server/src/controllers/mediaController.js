@@ -1,6 +1,56 @@
 const MediaModel = require('../models/mediaModel');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
+
+function getAuthorizedImportDir() {
+    const dir = process.env.LOCAL_IMPORT_DIR
+        ? path.resolve(process.env.LOCAL_IMPORT_DIR)
+        : path.join(__dirname, '../../uploads/import');
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+    }
+    return dir;
+}
+
+const ALLOWED_IMPORT_EXTENSIONS = new Set(['.mp4', '.mkv', '.avi', '.mov', '.webm', '.m4v']);
+
+function scanImportFolder(dirPath, baseDir) {
+    let results = [];
+    if (!fs.existsSync(dirPath)) return results;
+
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    for (const entry of entries) {
+        const fullPath = path.join(dirPath, entry.name);
+        const resolvedPath = path.resolve(fullPath);
+
+        if (!resolvedPath.startsWith(baseDir)) {
+            continue;
+        }
+
+        if (entry.isDirectory()) {
+            results = results.concat(scanImportFolder(fullPath, baseDir));
+        } else if (entry.isFile()) {
+            const ext = path.extname(entry.name).toLowerCase();
+            if (ALLOWED_IMPORT_EXTENSIONS.has(ext)) {
+                try {
+                    const stat = fs.statSync(resolvedPath);
+                    const relativePath = path.relative(baseDir, resolvedPath).replace(/\\/g, '/');
+                    const fileId = crypto.createHash('sha256').update(relativePath).digest('hex').substring(0, 32);
+                    results.push({
+                        fileId,
+                        fileName: entry.name,
+                        relativePath,
+                        fullPath: resolvedPath,
+                        fileSize: stat.size,
+                        fileFormat: ext.replace('.', '').toLowerCase()
+                    });
+                } catch (e) {}
+            }
+        }
+    }
+    return results;
+}
 
 const MediaController = {
     async checkAvailability(req, res) {
@@ -14,6 +64,152 @@ const MediaController = {
         } catch (err) {
             console.error('Error al comprobar disponibilidad:', err);
             return res.status(500).json({ error: 'Error interno del servidor.' });
+        }
+    },
+
+    async listImportableFiles(req, res) {
+        try {
+            const baseDir = getAuthorizedImportDir();
+            const scannedFiles = scanImportFolder(baseDir, baseDir);
+            const allMedia = await MediaModel.findAll();
+
+            const registeredPathsMap = new Map();
+            for (const item of allMedia) {
+                if (item.storage_path) {
+                    const normalizedStoragePath = path.resolve(item.storage_path);
+                    registeredPathsMap.set(normalizedStoragePath, item);
+                }
+            }
+
+            const files = scannedFiles.map(file => {
+                const registeredMedia = registeredPathsMap.get(file.fullPath);
+                return {
+                    fileId: file.fileId,
+                    fileName: file.fileName,
+                    relativePath: file.relativePath,
+                    fileSize: file.fileSize,
+                    fileFormat: file.fileFormat,
+                    isRegistered: Boolean(registeredMedia),
+                    registeredMedia: registeredMedia ? {
+                        id: registeredMedia.id,
+                        tmdb_id: registeredMedia.tmdb_id,
+                        display_title: registeredMedia.display_title || registeredMedia.file_name
+                    } : null
+                };
+            });
+
+            return res.status(200).json({
+                importDir: 'uploads/import',
+                filesCount: files.length,
+                files
+            });
+        } catch (err) {
+            console.error('Error al listar archivos para importación local:', err);
+            return res.status(500).json({ error: 'Error interno del servidor al listar archivos locales.' });
+        }
+    },
+
+    async importFiles(req, res) {
+        try {
+            const baseDir = getAuthorizedImportDir();
+            const scannedFiles = scanImportFolder(baseDir, baseDir);
+
+            const fileMap = new Map();
+            for (const sf of scannedFiles) {
+                fileMap.set(sf.fileId, sf);
+            }
+
+            let itemsToImport = [];
+            if (Array.isArray(req.body.items)) {
+                itemsToImport = req.body.items;
+            } else if (req.body.fileId) {
+                itemsToImport = [req.body];
+            }
+
+            if (!itemsToImport.length) {
+                return res.status(400).json({ error: 'No se han seleccionado archivos para importar.' });
+            }
+
+            const results = [];
+            const allMedia = await MediaModel.findAll();
+            const registeredPathsMap = new Map();
+            for (const item of allMedia) {
+                if (item.storage_path) {
+                    registeredPathsMap.set(path.resolve(item.storage_path), item);
+                }
+            }
+
+            for (const item of itemsToImport) {
+                const { fileId, tmdbId, mediaType, displayTitle } = item;
+                const targetFile = fileMap.get(fileId);
+
+                if (!targetFile) {
+                    results.push({
+                        fileId,
+                        success: false,
+                        error: 'Archivo no encontrado en la carpeta autorizada del servidor.'
+                    });
+                    continue;
+                }
+
+                if (!targetFile.fullPath.startsWith(baseDir) || !fs.existsSync(targetFile.fullPath)) {
+                    results.push({
+                        fileId,
+                        fileName: targetFile.fileName,
+                        success: false,
+                        error: 'Ruta no válida o el archivo ya no existe.'
+                    });
+                    continue;
+                }
+
+                const existing = registeredPathsMap.get(targetFile.fullPath);
+                if (existing) {
+                    results.push({
+                        fileId,
+                        fileName: targetFile.fileName,
+                        success: true,
+                        isDuplicate: true,
+                        message: 'El archivo ya estaba registrado en la biblioteca.',
+                        media: existing
+                    });
+                    continue;
+                }
+
+                const resolvedMediaType = (mediaType && mediaType !== 'null' && mediaType !== 'undefined') ? mediaType : (tmdbId ? 'movie' : 'independent');
+                const resolvedTmdbId = (tmdbId && String(tmdbId).trim().length > 0 && String(tmdbId) !== 'null' && String(tmdbId) !== 'undefined') ? String(tmdbId).trim() : null;
+
+                const uploadResult = await MediaModel.create({
+                    tmdbId: resolvedTmdbId,
+                    mediaType: resolvedMediaType,
+                    fileName: targetFile.fileName,
+                    fileSize: targetFile.fileSize,
+                    fileFormat: targetFile.fileFormat,
+                    storagePath: targetFile.fullPath,
+                    uploadedBy: req.user.userId,
+                    displayTitle: displayTitle ? String(displayTitle).trim() : targetFile.fileName.replace(/\.[^/.]+$/, '')
+                });
+
+                const mediaFile = uploadResult.media;
+                registeredPathsMap.set(targetFile.fullPath, mediaFile);
+
+                console.log(`[VENUS IMPORT] Película importada desde disco local: ID=${mediaFile.id} | Archivo=${targetFile.fileName} | TMDB=${resolvedTmdbId || 'Independiente'}`);
+
+                results.push({
+                    fileId,
+                    fileName: targetFile.fileName,
+                    success: true,
+                    isDuplicate: false,
+                    media: mediaFile
+                });
+            }
+
+            return res.status(200).json({
+                message: 'Proceso de importación finalizado',
+                results
+            });
+        } catch (err) {
+            console.error('Error al importar archivos locales:', err);
+            return res.status(500).json({ error: 'Error interno del servidor durante la importación.' });
         }
     },
 

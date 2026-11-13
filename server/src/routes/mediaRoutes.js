@@ -7,6 +7,8 @@ const upload = require('../middleware/uploadMiddleware');
 
 router.get('/library', authMiddleware, MediaController.getLibrary);
 router.get('/check/:tmdbId', authMiddleware, MediaController.checkAvailability);
+router.get('/import/files', authMiddleware, roleMiddleware(['admin', 'collaborator']), MediaController.listImportableFiles);
+router.post('/import', authMiddleware, roleMiddleware(['admin', 'collaborator']), MediaController.importFiles);
 router.get('/:id/stream', authMiddleware, MediaController.streamMedia);
 router.get('/', authMiddleware, MediaController.listMedia);
 router.get('/:id', authMiddleware, MediaController.getMediaInfo);
