@@ -167,6 +167,10 @@ class MainActivity : AppCompatActivity() {
         handleIntent(intent)
     }
 
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+    }
+
     internal fun handleIntent(intent: Intent?): Boolean {
         return AuthScreens(this).handleDeepLinkIntent(intent)
     }
@@ -410,10 +414,43 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.topHeaderLayout)?.visibility = if (visible) View.VISIBLE else View.GONE
     }
 
+    fun mostrarBottomNav(visible: Boolean) {
+        findViewById<View>(R.id.bottomNavLayout)?.visibility = if (visible) View.VISIBLE else View.GONE
+    }
+
+    private var activeWatchPartyScreen: com.example.venus.ui.watchparty.WatchPartyScreen? = null
+
     @androidx.media3.common.util.UnstableApi
     fun mostrarWatchPartyScreen() {
+        if (repository.getToken().isNullOrBlank()) {
+            mostrarPantallaAutenticacion()
+            return
+        }
         mostrarTopHeader(false)
-        com.example.venus.ui.watchparty.WatchPartyScreen(this).mostrarWatchPartyScreen()
+        if (activeWatchPartyScreen == null) {
+            activeWatchPartyScreen = com.example.venus.ui.watchparty.WatchPartyScreen(this)
+        }
+        activeWatchPartyScreen?.mostrarWatchPartyScreen()
+    }
+
+    fun detenerWatchPartyPlayer() {
+        activeWatchPartyScreen?.liberarPlayer()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        activeWatchPartyScreen?.pausarPlayer()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        activeWatchPartyScreen?.pausarPlayer()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        activeWatchPartyScreen?.liberarPlayer()
+        activeWatchPartyScreen = null
     }
 
     internal fun seleccionarNavegacion(seleccionado: Int) {
@@ -824,37 +861,79 @@ class MainActivity : AppCompatActivity() {
     }
 
     internal fun mostrarInicio() {
+        if (repository.getToken().isNullOrBlank()) {
+            mostrarPantallaAutenticacion()
+            return
+        }
+        detenerWatchPartyPlayer()
         mostrarTopHeader(true)
+        mostrarBottomNav(true)
         HomeScreen(this).mostrarInicio()
     }
 
     internal fun mostrarExplorar() {
+        if (repository.getToken().isNullOrBlank()) {
+            mostrarPantallaAutenticacion()
+            return
+        }
+        detenerWatchPartyPlayer()
         mostrarTopHeader(true)
+        mostrarBottomNav(true)
         ExploreScreen(this).mostrarExplorar()
     }
 
     internal fun mostrarMiLista() {
+        if (repository.getToken().isNullOrBlank()) {
+            mostrarPantallaAutenticacion()
+            return
+        }
+        detenerWatchPartyPlayer()
         mostrarTopHeader(true)
+        mostrarBottomNav(true)
         MyListScreen(this).mostrarMiLista()
     }
 
     internal fun mostrarDescargas() {
+        if (repository.getToken().isNullOrBlank()) {
+            mostrarPantallaAutenticacion()
+            return
+        }
+        detenerWatchPartyPlayer()
         mostrarTopHeader(true)
+        mostrarBottomNav(true)
         LibraryScreens(this).mostrarDescargas()
     }
 
     internal fun mostrarBiblioteca() {
+        if (repository.getToken().isNullOrBlank()) {
+            mostrarPantallaAutenticacion()
+            return
+        }
+        detenerWatchPartyPlayer()
         mostrarTopHeader(true)
+        mostrarBottomNav(true)
         LibraryScreens(this).mostrarBiblioteca()
     }
 
     internal fun mostrarPerfil() {
+        if (repository.getToken().isNullOrBlank()) {
+            mostrarPantallaAutenticacion()
+            return
+        }
+        detenerWatchPartyPlayer()
         mostrarTopHeader(true)
+        mostrarBottomNav(true)
         ProfileScreen(this).mostrarPerfil()
     }
 
     internal fun mostrarMiBibliotecaIndependiente() {
+        if (repository.getToken().isNullOrBlank()) {
+            mostrarPantallaAutenticacion()
+            return
+        }
+        detenerWatchPartyPlayer()
         mostrarTopHeader(true)
+        mostrarBottomNav(true)
         LibraryScreens(this).mostrarMiBibliotecaIndependiente()
     }
 

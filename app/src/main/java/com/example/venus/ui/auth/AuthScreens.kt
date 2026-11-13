@@ -60,7 +60,10 @@ class AuthScreens(private val activity: MainActivity) {
     }
 
     fun mostrarPantallaAutenticacion() {
+        activity.mostrarTopHeader(false)
+        activity.mostrarBottomNav(false)
         activity.content.removeAllViews()
+
         val scroll = ScrollView(activity).apply {
             isFillViewport = true
             setBackgroundColor(activity.fondo)
@@ -86,7 +89,7 @@ class AuthScreens(private val activity: MainActivity) {
             textSize = 14f
             setTextColor(activity.gris)
             gravity = Gravity.CENTER
-            setPadding(0, 0, 0, activity.dp(32))
+            setPadding(0, 0, 0, activity.dp(24))
         }
 
         val txtError = TextView(activity).apply {

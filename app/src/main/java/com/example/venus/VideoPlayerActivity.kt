@@ -64,14 +64,6 @@ class VideoPlayerActivity : AppCompatActivity() {
     private var isCoverMode = false
     private var isMuted = false
 
-    // Live Chat Overlay
-    private var liveChatContainer: LinearLayout? = null
-    private var scrollLiveChat: android.widget.ScrollView? = null
-    private var liveChatMessagesList: LinearLayout? = null
-    private var inputLiveChatMsg: android.widget.EditText? = null
-    private var btnSendLiveChatMsg: TextView? = null
-    private var isProcessingRemoteSync = false
-
     // In-App YouTube WebView Player
     private lateinit var webViewContainer: FrameLayout
     private lateinit var webViewPlayer: WebView
@@ -100,7 +92,6 @@ class VideoPlayerActivity : AppCompatActivity() {
     private var currentSpeedIndex = 2 // 1.0x
 
     private val venusSensorManager by lazy { com.example.venus.sensor.VenusSensorManager(this) }
-    private val wsManager by lazy { com.example.venus.network.VenusWebSocketManager.getInstance(applicationContext) }
 
     private val handler = Handler(Looper.getMainLooper())
 
@@ -158,7 +149,6 @@ class VideoPlayerActivity : AppCompatActivity() {
         txtVideoTitle.text = videoTitle
 
         initPlayer()
-        observeWatchPartyEvents()
     }
 
     private fun initViews() {
@@ -181,21 +171,6 @@ class VideoPlayerActivity : AppCompatActivity() {
         btnPlayPauseSmall = playerView.findViewById(R.id.exo_play_pause_small)
         btnFullscreen = playerView.findViewById(R.id.btnFullscreen)
         txtTimeFormatted = playerView.findViewById(R.id.txtTimeFormatted)
-
-        liveChatContainer = playerView.findViewById(R.id.liveChatContainer)
-        scrollLiveChat = playerView.findViewById(R.id.scrollLiveChat)
-        liveChatMessagesList = playerView.findViewById(R.id.liveChatMessagesList)
-        inputLiveChatMsg = playerView.findViewById(R.id.inputLiveChatMsg)
-        btnSendLiveChatMsg = playerView.findViewById(R.id.btnSendLiveChatMsg)
-
-        btnSendLiveChatMsg?.setOnClickListener {
-            val txt = inputLiveChatMsg?.text?.toString()?.trim() ?: ""
-            val room = wsManager.currentRoomState.value
-            if (txt.isNotBlank() && room != null && room.status == "active") {
-                wsManager.sendChatMessage(room.id, txt)
-                inputLiveChatMsg?.setText("")
-            }
-        }
     }
 
     private fun initAudioManager() {
@@ -583,139 +558,6 @@ class VideoPlayerActivity : AppCompatActivity() {
         val posStr = formatMs(pos)
         val durStr = if (dur > 0) formatMs(dur) else "00:00"
         txtTimeFormatted?.text = "$posStr / $durStr"
-    }
-
-    private fun dp(value: Int): Int {
-        return (value * resources.displayMetrics.density).toInt()
-    }
-
-    private fun observeWatchPartyEvents() {
-        lifecycleScope.launch {
-            wsManager.currentRoomState.collect { room ->
-                actualizarInterfazWatchParty(room)
-                if (room != null && room.status == "active") {
-                    aplicarEstadoAutoritativoRemote(room)
-                }
-            }
-        }
-
-        lifecycleScope.launch {
-            wsManager.chatHistoryFlow.collect { messages ->
-                renderLiveChatMessages(messages)
-            }
-        }
-
-        lifecycleScope.launch {
-            wsManager.chatMessageFlow.collect { msg ->
-                val currentList = wsManager.chatHistoryFlow.value
-                renderLiveChatMessages(currentList)
-            }
-        }
-
-        lifecycleScope.launch {
-            wsManager.eventFlow.collect { event ->
-                when (event) {
-                    is com.example.venus.network.WatchPartyRoomEvent.Created -> {
-                        Toast.makeText(this@VideoPlayerActivity, "SALA CREADA: ${event.room.roomCode}", Toast.LENGTH_LONG).show()
-                    }
-                    is com.example.venus.network.WatchPartyRoomEvent.Joined -> {
-                        Toast.makeText(this@VideoPlayerActivity, "UNIDO A LA SALA: ${event.room.roomCode}", Toast.LENGTH_LONG).show()
-                    }
-                    is com.example.venus.network.WatchPartyRoomEvent.UserJoined -> {
-                        Toast.makeText(this@VideoPlayerActivity, "${event.username} se unió a la sala", Toast.LENGTH_SHORT).show()
-                    }
-                    is com.example.venus.network.WatchPartyRoomEvent.UserLeft -> {
-                        Toast.makeText(this@VideoPlayerActivity, "${event.username} salió de la sala", Toast.LENGTH_SHORT).show()
-                    }
-                    else -> {}
-                }
-            }
-        }
-    }
-
-    private fun renderLiveChatMessages(messages: List<com.example.venus.network.WatchPartyChatMessage>) {
-        val container = liveChatMessagesList ?: return
-        container.removeAllViews()
-
-        messages.forEach { msg ->
-            val msgRow = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(6), dp(3), dp(6), dp(3))
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { bottomMargin = dp(4) }
-            }
-
-            val txtSender = TextView(this).apply {
-                text = "${msg.name} ${if (msg.isHost) "[Anfitrión]" else ""}"
-                textSize = 10f
-                setTextColor(if (msg.isHost) Color.rgb(255, 215, 0) else Color.rgb(0, 168, 255))
-                setTypeface(null, Typeface.BOLD)
-            }
-
-            val txtBody = TextView(this).apply {
-                text = msg.message
-                textSize = 12f
-                setTextColor(Color.WHITE)
-            }
-
-            msgRow.addView(txtSender)
-            msgRow.addView(txtBody)
-            container.addView(msgRow)
-        }
-
-        scrollLiveChat?.post {
-            scrollLiveChat?.fullScroll(View.FOCUS_DOWN)
-        }
-    }
-
-    private fun actualizarInterfazWatchParty(room: com.example.venus.network.WatchPartyRoomState?) {
-        val txtSub = playerView.findViewById<TextView>(R.id.txtEpisodeSubtitle)
-        if (room != null && room.status == "active") {
-            txtSub?.visibility = View.VISIBLE
-            txtSub?.text = "CÓDIGO DE SALA: ${room.roomCode} (${room.participants.size} participantes)"
-            txtSub?.setTextColor(Color.rgb(0, 168, 255))
-            liveChatContainer?.visibility = View.VISIBLE
-            wsManager.requestChatHistory(room.id)
-        } else {
-            txtSub?.visibility = View.GONE
-            liveChatContainer?.visibility = View.GONE
-        }
-    }
-
-    private fun aplicarEstadoAutoritativoRemote(room: com.example.venus.network.WatchPartyRoomState) {
-        val player = exoPlayer ?: return
-        if (isProcessingRemoteSync) return
-
-        val now = System.currentTimeMillis()
-        var targetPosition = room.currentPositionMs
-        if (room.isPlaying) {
-            val elapsed = (now - room.serverTime).coerceAtLeast(0)
-            targetPosition += elapsed
-        }
-
-        val currentPos = player.currentPosition
-        val diff = Math.abs(currentPos - targetPosition)
-
-        isProcessingRemoteSync = true
-        try {
-            if (diff > 1500) {
-                player.seekTo(targetPosition)
-            }
-
-            if (player.isPlaying != room.isPlaying) {
-                if (room.isPlaying) {
-                    player.play()
-                } else {
-                    player.pause()
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("VideoPlayer", "Error aplicando sync remoto", e)
-        } finally {
-            isProcessingRemoteSync = false
-        }
     }
 
     private fun toggleResizeMode() {

@@ -288,14 +288,25 @@ class VenusWebSocketManager private constructor(context: Context) {
         if (participantsArray != null) {
             for (i in 0 until participantsArray.length()) {
                 val pObj = participantsArray.getJSONObject(i)
+                val pUserId = when {
+                    pObj.has("userId") && pObj.optString("userId").isNotBlank() -> pObj.optString("userId")
+                    pObj.has("user_id") && pObj.optString("user_id").isNotBlank() -> pObj.optString("user_id")
+                    else -> ""
+                }
+                val pAllowedControl = when {
+                    pObj.has("allowedControl") -> pObj.optBoolean("allowedControl")
+                    pObj.has("allowed_control") -> pObj.optBoolean("allowed_control")
+                    else -> false
+                }
+
                 participantsList.add(
                     WatchPartyParticipant(
-                        userId = pObj.optString("userId"),
+                        userId = pUserId,
                         name = pObj.optString("name", "Usuario"),
                         username = pObj.optString("username", "usuario"),
                         avatar = if (pObj.isNull("avatar")) null else pObj.optString("avatar"),
                         role = pObj.optString("role", "guest"),
-                        allowedControl = pObj.optBoolean("allowedControl", false)
+                        allowedControl = pAllowedControl
                     )
                 )
             }

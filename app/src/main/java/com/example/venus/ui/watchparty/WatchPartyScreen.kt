@@ -5,14 +5,20 @@ import android.animation.AnimatorListenerAdapter
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.graphics.Color
 import android.graphics.Typeface
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.view.GestureDetector
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
+import android.view.WindowInsets
+import android.view.WindowInsetsController
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
@@ -33,13 +39,10 @@ import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.venus.MainActivity
 import com.example.venus.R
-import com.example.venus.VideoPlayerActivity
 import com.example.venus.network.ApiClient
 import com.example.venus.network.MediaFileDto
 import com.example.venus.network.VenusWebSocketManager
 import com.example.venus.network.WatchPartyChatMessage
-import com.example.venus.network.WatchPartyParticipant
-import com.example.venus.network.WatchPartyRoomEvent
 import com.example.venus.network.WatchPartyRoomState
 import com.example.venus.ui.components.VenusComponents
 import com.example.venus.ui.dialogs.WatchPartyDialogs
@@ -67,17 +70,25 @@ class WatchPartyScreen(private val activity: MainActivity) {
     private val handler = Handler(Looper.getMainLooper())
 
     private var isSeeking = false
+    private var isControlsVisible = true
+    private var isFullscreenMode = false
     private var isChatExpanded = true
-    private var isMovieInfoExpanded = true
+    private var currentResizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+    private val viewsToToggleFullscreen = mutableListOf<View>()
+    private val hideControlsRunnable = Runnable { ocultarControlesPlayer() }
 
     private enum class ViewMode { NONE, CATALOG, ROOM }
     private var currentViewMode = ViewMode.NONE
 
     private var rootContainer: LinearLayout? = null
+    private var rootRoomLayoutRef: LinearLayout? = null
 
     // Componentes dinámicos de la sala de reproducción
     private var videoContainerFrame: FrameLayout? = null
     private var playerViewRef: PlayerView? = null
+    private var controlsOverlayRef: LinearLayout? = null
+    private var playerBottomBarRef: LinearLayout? = null
+    private var btnFullscreenToggleRef: ImageView? = null
     private var btnPlayPauseRef: ImageView? = null
     private var txtCurrentTimeRef: TextView? = null
     private var txtTotalDurationRef: TextView? = null
@@ -93,31 +104,55 @@ class WatchPartyScreen(private val activity: MainActivity) {
     private var txtChatUnreadBadgeRef: TextView? = null
     private var inputChatMessageRef: EditText? = null
 
+    private var playerAndChatRowRef: LinearLayout? = null
+    private var sideChatPanelRef: LinearLayout? = null
+    private var sideChatMessagesContainerRef: LinearLayout? = null
+    private var scrollSideChatRef: ScrollView? = null
+    private var inputSideChatMessageRef: EditText? = null
+    private var btnSideChatToggleRef: ImageView? = null
+    private var isSideChatVisibleInLandscape = true
+
     fun mostrarWatchPartyScreen() {
         activity.mostrarTopHeader(false)
         activity.seleccionarNavegacion(1)
-        val pantalla = activity.prepararPantalla()
-        rootContainer = pantalla
 
         wsManager.connect()
+
+        val activeRoom = wsManager.currentRoomState.value
+        if (activeRoom != null && activeRoom.status == "active") {
+            currentViewMode = ViewMode.ROOM
+            activeRoomId = activeRoom.id
+            activity.mostrarTopHeader(false)
+            renderizarSalaDeReproduccion(activity.prepararPantalla(), activeRoom)
+        } else {
+            currentViewMode = ViewMode.CATALOG
+            activeRoomId = null
+            activity.mostrarTopHeader(true)
+            liberarPlayer()
+            renderizarCatalogoWatchParty(activity.prepararPantalla())
+        }
 
         roomStateJob?.cancel()
         roomStateJob = activity.lifecycleScope.launch {
             wsManager.currentRoomState.collect { room ->
-                if (room != null && room.status == "active") {
-                    if (currentViewMode != ViewMode.ROOM || activeRoomId != room.id) {
-                        currentViewMode = ViewMode.ROOM
-                        activeRoomId = room.id
-                        renderizarSalaDeReproduccion(pantalla, room)
+                activity.runOnUiThread {
+                    if (room != null && room.status == "active") {
+                        if (currentViewMode != ViewMode.ROOM || activeRoomId != room.id) {
+                            currentViewMode = ViewMode.ROOM
+                            activeRoomId = room.id
+                            activity.mostrarTopHeader(false)
+                            renderizarSalaDeReproduccion(activity.prepararPantalla(), room)
+                        } else {
+                            actualizarDatosSala(room)
+                        }
                     } else {
-                        actualizarDatosSala(room)
-                    }
-                } else {
-                    if (currentViewMode != ViewMode.CATALOG) {
-                        currentViewMode = ViewMode.CATALOG
-                        activeRoomId = null
-                        liberarPlayer()
-                        renderizarCatalogoWatchParty(pantalla)
+                        if (currentViewMode != ViewMode.CATALOG) {
+                            currentViewMode = ViewMode.CATALOG
+                            activeRoomId = null
+                            activity.mostrarTopHeader(true)
+                            liberarPlayer()
+                            renderizarCatalogoWatchParty(activity.prepararPantalla())
+                        }
                     }
                 }
             }
@@ -305,10 +340,30 @@ class WatchPartyScreen(private val activity: MainActivity) {
     }
 
     // =========================================================================
-    // RENDERIZADO COMPLETO DE LA SALA DE REPRODUCCIÓN (MATCHING USER SCREENSHOT)
+    // RENDERIZADO COMPLETO DE LA SALA DE REPRODUCCIÓN FIJA Y DESLIZABLE
     // =========================================================================
     private fun renderizarSalaDeReproduccion(pantalla: LinearLayout, room: WatchPartyRoomState) {
-        pantalla.removeAllViews()
+        val content = activity.content
+        content.removeAllViews()
+
+        val rootRoomLayout = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            setPadding(activity.dp(20), activity.dp(16), activity.dp(20), activity.dp(8))
+        }
+        rootRoomLayoutRef = rootRoomLayout
+
+        // 1. SECCIÓN FIJA SUPERIOR (ENCABEZADOS + REPRODUCTOR DE VIDEO FIJO)
+        val topFixedContainer = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
 
         // 1. TOP BRAND & APP HEADER (VENUS Logo + Badge Participantes + Botón Salir)
         val topAppHeader = LinearLayout(activity).apply {
@@ -325,7 +380,6 @@ class WatchPartyScreen(private val activity: MainActivity) {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
 
-        // Badge de participantes en Top Bar
         val badgeParticipants = LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -357,7 +411,6 @@ class WatchPartyScreen(private val activity: MainActivity) {
         badgeParticipants.addView(imgIconUsers)
         badgeParticipants.addView(txtCountBadge)
 
-        // Botón Salir (Borde rojo con icono de salida)
         val btnSalir = LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -366,7 +419,12 @@ class WatchPartyScreen(private val activity: MainActivity) {
             isClickable = true
             setOnClickListener {
                 wsManager.leaveRoom(room.id)
+                currentViewMode = ViewMode.CATALOG
+                activeRoomId = null
+                restaurarBarrasSistema()
                 activity.mostrarTopHeader(true)
+                liberarPlayer()
+                renderizarCatalogoWatchParty(activity.prepararPantalla())
                 Toast.makeText(activity, "Has salido de la sala de Watch Party", Toast.LENGTH_SHORT).show()
             }
         }
@@ -390,8 +448,6 @@ class WatchPartyScreen(private val activity: MainActivity) {
         topAppHeader.addView(badgeParticipants)
         topAppHeader.addView(btnSalir)
 
-        pantalla.addView(topAppHeader)
-
         // 2. SUB-HEADER BAR (VOLVER <, WATCH PARTY TITLE, SALA PRIVADA BADGE, MENÚ ...)
         val subHeaderNav = LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -405,9 +461,13 @@ class WatchPartyScreen(private val activity: MainActivity) {
             setPadding(0, activity.dp(4), activity.dp(10), activity.dp(4))
             isClickable = true
             setOnClickListener {
+                wsManager.leaveRoom(room.id)
                 currentViewMode = ViewMode.CATALOG
+                activeRoomId = null
+                restaurarBarrasSistema()
                 activity.mostrarTopHeader(true)
-                renderizarCatalogoWatchParty(pantalla)
+                liberarPlayer()
+                renderizarCatalogoWatchParty(activity.prepararPantalla())
             }
         }
 
@@ -461,9 +521,7 @@ class WatchPartyScreen(private val activity: MainActivity) {
         subHeaderNav.addView(badgePrivate)
         subHeaderNav.addView(btnMenuOverflow)
 
-        pantalla.addView(subHeaderNav)
-
-        // 3. CONTENEDOR DEL REPRODUCTOR DE VIDEO EMBEBIDO CON CONTROLES (16:9 RATIO)
+        // 3. CONTENEDOR DEL REPRODUCTOR DE VIDEO EMBEBIDO CON CONTROLES
         val videoContainer = FrameLayout(activity).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -480,11 +538,56 @@ class WatchPartyScreen(private val activity: MainActivity) {
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
-            )
+            ).apply {
+                gravity = Gravity.CENTER
+            }
             useController = false
+            resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
         }
         playerViewRef = playerView
         videoContainer.addView(playerView)
+
+        // GestureDetector para un toque (alternar controles) y doble toque (±10s)
+        val gestureDetector = GestureDetector(activity, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                alternarVisibilidadControles()
+                return true
+            }
+
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                val width = videoContainer.width.toFloat()
+                if (width <= 0) return false
+                val x = e.x
+                if (x < width * 0.40f) {
+                    if (puedeControlar(room)) {
+                        val pos = (exoPlayer?.currentPosition ?: 0L) - 10000L
+                        val targetPos = pos.coerceAtLeast(0L)
+                        exoPlayer?.seekTo(targetPos)
+                        wsManager.sendSync(room.id, exoPlayer?.isPlaying == true, targetPos)
+                        animarEfectoDoubleTap(videoContainer, "-10s", true)
+                    }
+                } else if (x > width * 0.60f) {
+                    if (puedeControlar(room)) {
+                        val pos = (exoPlayer?.currentPosition ?: 0L) + 10000L
+                        exoPlayer?.seekTo(pos)
+                        wsManager.sendSync(room.id, exoPlayer?.isPlaying == true, pos)
+                        animarEfectoDoubleTap(videoContainer, "+10s", false)
+                    }
+                } else {
+                    if (puedeControlar(room)) {
+                        val isCurrentlyPlaying = exoPlayer?.isPlaying == true
+                        if (isCurrentlyPlaying) exoPlayer?.pause() else exoPlayer?.play()
+                        wsManager.sendSync(room.id, !isCurrentlyPlaying, exoPlayer?.currentPosition ?: 0L)
+                    }
+                }
+                return true
+            }
+        })
+
+        videoContainer.setOnTouchListener { _, event ->
+            gestureDetector.onTouchEvent(event)
+            true
+        }
 
         // Badge HD superior derecho del reproductor
         val badgeHdVideo = TextView(activity).apply {
@@ -505,7 +608,7 @@ class WatchPartyScreen(private val activity: MainActivity) {
         }
         videoContainer.addView(badgeHdVideo)
 
-        // Overlay de controles de reproducción central (Retroceder 10s, Play/Pausa, Adelantar 10s)
+        // Overlay de controles de reproducción central SIMÉTRICOS Y CENTRADOS
         val controlsOverlay = LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
@@ -516,14 +619,16 @@ class WatchPartyScreen(private val activity: MainActivity) {
                 gravity = Gravity.CENTER
             }
         }
+        controlsOverlayRef = controlsOverlay
 
         val btnRewind = ImageView(activity).apply {
-            setImageResource(R.drawable.ic_rewind_10)
+            setImageResource(R.drawable.ic_rewind_10_sleek)
             setColorFilter(Color.WHITE)
-            setPadding(activity.dp(10), activity.dp(10), activity.dp(10), activity.dp(10))
-            background = VenusComponents.fondoRedondeado(Color.argb(180, 27, 24, 35), 23, activity)
-            layoutParams = LinearLayout.LayoutParams(activity.dp(46), activity.dp(46)).apply {
-                marginEnd = activity.dp(24)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            setPadding(activity.dp(12), activity.dp(12), activity.dp(12), activity.dp(12))
+            background = VenusComponents.fondoRedondeado(Color.argb(200, 20, 16, 28), 26, activity)
+            layoutParams = LinearLayout.LayoutParams(activity.dp(52), activity.dp(52)).apply {
+                marginEnd = activity.dp(32)
             }
             isClickable = true
             setOnClickListener {
@@ -535,15 +640,17 @@ class WatchPartyScreen(private val activity: MainActivity) {
                 } else {
                     Toast.makeText(activity, "Solo el anfitrión tiene control de la reproducción", Toast.LENGTH_SHORT).show()
                 }
+                programarOcultarControles()
             }
         }
 
         val btnPlayPause = ImageView(activity).apply {
             setImageResource(if (room.isPlaying) R.drawable.ic_pause_white else R.drawable.ic_play_white)
             setColorFilter(Color.WHITE)
-            setPadding(activity.dp(16), activity.dp(16), activity.dp(16), activity.dp(16))
-            background = VenusComponents.fondoRedondeado(Color.rgb(135, 56, 245), 30, activity)
-            layoutParams = LinearLayout.LayoutParams(activity.dp(60), activity.dp(60))
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            setPadding(activity.dp(18), activity.dp(18), activity.dp(18), activity.dp(18))
+            background = VenusComponents.fondoRedondeado(Color.rgb(135, 56, 245), 34, activity)
+            layoutParams = LinearLayout.LayoutParams(activity.dp(68), activity.dp(68))
             isClickable = true
             setOnClickListener {
                 if (puedeControlar(room)) {
@@ -558,17 +665,19 @@ class WatchPartyScreen(private val activity: MainActivity) {
                 } else {
                     Toast.makeText(activity, "Solo el anfitrión puede controlar la reproducción", Toast.LENGTH_SHORT).show()
                 }
+                programarOcultarControles()
             }
         }
         btnPlayPauseRef = btnPlayPause
 
         val btnForward = ImageView(activity).apply {
-            setImageResource(R.drawable.ic_forward_10)
+            setImageResource(R.drawable.ic_forward_10_sleek)
             setColorFilter(Color.WHITE)
-            setPadding(activity.dp(10), activity.dp(10), activity.dp(10), activity.dp(10))
-            background = VenusComponents.fondoRedondeado(Color.argb(180, 27, 24, 35), 23, activity)
-            layoutParams = LinearLayout.LayoutParams(activity.dp(46), activity.dp(46)).apply {
-                marginStart = activity.dp(24)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            setPadding(activity.dp(12), activity.dp(12), activity.dp(12), activity.dp(12))
+            background = VenusComponents.fondoRedondeado(Color.argb(200, 20, 16, 28), 26, activity)
+            layoutParams = LinearLayout.LayoutParams(activity.dp(52), activity.dp(52)).apply {
+                marginStart = activity.dp(32)
             }
             isClickable = true
             setOnClickListener {
@@ -579,6 +688,7 @@ class WatchPartyScreen(private val activity: MainActivity) {
                 } else {
                     Toast.makeText(activity, "Solo el anfitrión tiene control de la reproducción", Toast.LENGTH_SHORT).show()
                 }
+                programarOcultarControles()
             }
         }
 
@@ -587,12 +697,15 @@ class WatchPartyScreen(private val activity: MainActivity) {
         controlsOverlay.addView(btnForward)
         videoContainer.addView(controlsOverlay)
 
-        // Overlay barra inferior del reproductor (Tiempo actual, SeekBar, Tiempo total, Fullscreen)
+        // Overlay barra inferior del reproductor (Tiempo actual, SeekBar, Tiempo total, Aspecto, Chat, Fullscreen)
         val playerBottomBar = LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(activity.dp(12), activity.dp(6), activity.dp(12), activity.dp(8))
-            background = VenusComponents.fondoRedondeado(Color.argb(160, 0, 0, 0), 0, activity)
+            setPadding(activity.dp(14), activity.dp(8), activity.dp(14), activity.dp(10))
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(Color.TRANSPARENT, Color.argb(230, 8, 6, 12))
+            )
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT
@@ -600,6 +713,7 @@ class WatchPartyScreen(private val activity: MainActivity) {
                 gravity = Gravity.BOTTOM
             }
         }
+        playerBottomBarRef = playerBottomBar
 
         val txtCurrentTime = TextView(activity).apply {
             text = "00:00"
@@ -639,6 +753,7 @@ class WatchPartyScreen(private val activity: MainActivity) {
                             Toast.makeText(activity, "Solo el anfitrión puede cambiar el tiempo", Toast.LENGTH_SHORT).show()
                         }
                     }
+                    programarOcultarControles()
                 }
             })
         }
@@ -648,31 +763,251 @@ class WatchPartyScreen(private val activity: MainActivity) {
             text = "00:00"
             textSize = 11f
             setTextColor(Color.rgb(185, 178, 201))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                marginEnd = activity.dp(14)
+            }
         }
         txtTotalDurationRef = txtTotalDuration
+
+        val btnAspectMode = TextView(activity).apply {
+            text = "ZOOM"
+            textSize = 10f
+            setTextColor(Color.WHITE)
+            setTypeface(null, Typeface.BOLD)
+            setPadding(activity.dp(8), activity.dp(4), activity.dp(8), activity.dp(4))
+            background = VenusComponents.fondoRedondeado(Color.argb(140, 255, 255, 255), 8, activity)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                marginEnd = activity.dp(10)
+            }
+            isClickable = true
+            setOnClickListener {
+                currentResizeMode = when (currentResizeMode) {
+                    androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> {
+                        text = "FIT"
+                        androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    }
+                    androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT -> {
+                        text = "FILL"
+                        androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
+                    }
+                    else -> {
+                        text = "ZOOM"
+                        androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    }
+                }
+                playerViewRef?.resizeMode = currentResizeMode
+                programarOcultarControles()
+                Toast.makeText(activity, "Modo de Pantalla: $text", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        val btnSideChatToggle = ImageView(activity).apply {
+            setImageResource(R.drawable.ic_chat)
+            setColorFilter(Color.rgb(196, 181, 253))
+            setPadding(activity.dp(6), activity.dp(6), activity.dp(6), activity.dp(6))
+            background = VenusComponents.fondoRedondeado(Color.argb(160, 48, 36, 68), 18, activity)
+            layoutParams = LinearLayout.LayoutParams(activity.dp(36), activity.dp(36)).apply {
+                marginEnd = activity.dp(10)
+            }
+            visibility = View.GONE
+            isClickable = true
+            setOnClickListener {
+                isSideChatVisibleInLandscape = !isSideChatVisibleInLandscape
+                actualizarLayoutSegunChatVisibilidad()
+                setColorFilter(if (isSideChatVisibleInLandscape) Color.rgb(135, 56, 245) else Color.WHITE)
+                programarOcultarControles()
+            }
+        }
+        btnSideChatToggleRef = btnSideChatToggle
 
         val btnFullscreenToggle = ImageView(activity).apply {
             setImageResource(R.drawable.ic_fullscreen_white)
             setColorFilter(Color.WHITE)
-            setPadding(activity.dp(6), 0, 0, 0)
-            layoutParams = LinearLayout.LayoutParams(activity.dp(24), activity.dp(24))
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            setPadding(activity.dp(6), activity.dp(6), activity.dp(6), activity.dp(6))
+            background = VenusComponents.fondoRedondeado(Color.argb(180, 135, 56, 245), 18, activity)
+            layoutParams = LinearLayout.LayoutParams(activity.dp(36), activity.dp(36))
             isClickable = true
             setOnClickListener {
-                abrirPantallaCompleta(room)
+                togglePantallaCompleta()
+                programarOcultarControles()
             }
         }
+        btnFullscreenToggleRef = btnFullscreenToggle
 
         playerBottomBar.addView(txtCurrentTime)
         playerBottomBar.addView(seekBar)
         playerBottomBar.addView(txtTotalDuration)
+        playerBottomBar.addView(btnAspectMode)
+        playerBottomBar.addView(btnSideChatToggle)
         playerBottomBar.addView(btnFullscreenToggle)
 
         videoContainer.addView(playerBottomBar)
 
-        pantalla.addView(videoContainer)
+        // Fila de reproductor + chat lateral en modo horizontal (Landscape)
+        val playerAndChatRow = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                activity.dp(210)
+            ).apply {
+                bottomMargin = activity.dp(12)
+            }
+        }
+        playerAndChatRowRef = playerAndChatRow
 
-        // Inicializar/conectar ExoPlayer
+        videoContainer.layoutParams = LinearLayout.LayoutParams(
+            0,
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            1f
+        )
+
+        // Panel de chat lateral para pantalla completa landscape (Estilizado 160dp)
+        val sideChatPanel = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+            background = VenusComponents.fondoRedondeado(Color.rgb(23, 19, 33), 16, activity)
+            layoutParams = LinearLayout.LayoutParams(
+                activity.dp(160),
+                LinearLayout.LayoutParams.MATCH_PARENT
+            ).apply {
+                marginStart = activity.dp(6)
+            }
+            setPadding(activity.dp(10), activity.dp(10), activity.dp(10), activity.dp(10))
+        }
+        sideChatPanelRef = sideChatPanel
+
+        val sideChatHeader = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, activity.dp(8))
+        }
+
+        val imgIconSideChat = ImageView(activity).apply {
+            setImageResource(R.drawable.ic_chat)
+            setColorFilter(Color.rgb(196, 181, 253))
+            layoutParams = LinearLayout.LayoutParams(activity.dp(16), activity.dp(16)).apply {
+                marginEnd = activity.dp(6)
+            }
+        }
+
+        val txtSideChatTitle = TextView(activity).apply {
+            text = "Chat en vivo"
+            textSize = 13f
+            setTextColor(Color.WHITE)
+            setTypeface(null, Typeface.BOLD)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+
+        val btnCloseSideChat = ImageView(activity).apply {
+            setImageResource(R.drawable.ic_close)
+            setColorFilter(Color.WHITE)
+            layoutParams = LinearLayout.LayoutParams(activity.dp(20), activity.dp(20))
+            isClickable = true
+            setOnClickListener {
+                isSideChatVisibleInLandscape = false
+                actualizarLayoutSegunChatVisibilidad()
+                btnSideChatToggleRef?.setColorFilter(Color.WHITE)
+            }
+        }
+
+        sideChatHeader.addView(imgIconSideChat)
+        sideChatHeader.addView(txtSideChatTitle)
+        sideChatHeader.addView(btnCloseSideChat)
+
+        val scrollSideChat = ScrollView(activity).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            ).apply {
+                bottomMargin = activity.dp(8)
+            }
+        }
+        scrollSideChatRef = scrollSideChat
+
+        val containerSideChatMsgs = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        sideChatMessagesContainerRef = containerSideChatMsgs
+        scrollSideChat.addView(containerSideChatMsgs)
+
+        val rowSideChatInput = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        val inputSideChat = EditText(activity).apply {
+            hint = "Mensaje..."
+            setHintTextColor(Color.rgb(185, 178, 201))
+            setTextColor(Color.WHITE)
+            textSize = 11f
+            setPadding(activity.dp(10), activity.dp(8), activity.dp(10), activity.dp(8))
+            background = VenusComponents.fondoRedondeado(Color.rgb(32, 27, 45), 16, activity)
+            layoutParams = LinearLayout.LayoutParams(0, activity.dp(32), 1f).apply {
+                marginEnd = activity.dp(6)
+            }
+        }
+        inputSideChatMessageRef = inputSideChat
+
+        val btnSendSideChat = ImageView(activity).apply {
+            setImageResource(R.drawable.ic_send)
+            setColorFilter(Color.WHITE)
+            setPadding(activity.dp(8), activity.dp(8), activity.dp(8), activity.dp(8))
+            background = VenusComponents.fondoRedondeado(Color.rgb(135, 56, 245), 18, activity)
+            layoutParams = LinearLayout.LayoutParams(activity.dp(32), activity.dp(32))
+            isClickable = true
+            setOnClickListener {
+                val txt = inputSideChat.text.toString().trim()
+                if (txt.isNotBlank()) {
+                    wsManager.sendChatMessage(room.id, txt)
+                    inputSideChat.setText("")
+                }
+            }
+        }
+
+        rowSideChatInput.addView(inputSideChat)
+        rowSideChatInput.addView(btnSendSideChat)
+
+        sideChatPanel.addView(sideChatHeader)
+        sideChatPanel.addView(scrollSideChat)
+        sideChatPanel.addView(rowSideChatInput)
+
+        safeAddView(playerAndChatRow, videoContainer)
+        safeAddView(playerAndChatRow, sideChatPanel)
+
+        safeAddView(topFixedContainer, topAppHeader)
+        safeAddView(topFixedContainer, subHeaderNav)
+        safeAddView(topFixedContainer, playerAndChatRow)
+
+        rootRoomLayout.addView(topFixedContainer)
+
+        // Inicializar/conectar ExoPlayer y flujo de Chat
         inicializarExoPlayerParaSala(room)
+        configurarFlujoChat(room.id)
+
+        // 2. SECCIÓN SCROLLEABLE INFERIOR (INFORMACIÓN, PARTICIPANTES, CHAT, REACCIONES)
+        val bottomScroll = ScrollView(activity).apply {
+            isFillViewport = true
+            overScrollMode = View.OVER_SCROLL_NEVER
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+        }
+
+        val scrollableColumn = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, activity.dp(4), 0, activity.dp(12))
+        }
 
         // 4. TARJETA DE INFORMACIÓN DE PELÍCULA EN REPRODUCCIÓN
         val cardMovieInfo = LinearLayout(activity).apply {
@@ -766,11 +1101,6 @@ class WatchPartyScreen(private val activity: MainActivity) {
         cardMovieInfo.addView(colMovieText)
         cardMovieInfo.addView(btnExpandMovie)
 
-        pantalla.addView(cardMovieInfo)
-
-        // Actualizar poster y metadata según película
-        actualizarInfoPeliculaCard(room)
-
         // 5. SECCIÓN PARTICIPANTES ("Participantes (4)", "Ver todos ->")
         val cardParticipants = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
@@ -836,10 +1166,6 @@ class WatchPartyScreen(private val activity: MainActivity) {
         scrollHorizontalParticipants.addView(containerParticipantsRow)
 
         cardParticipants.addView(scrollHorizontalParticipants)
-        pantalla.addView(cardParticipants)
-
-        // Renderizar avatares de participantes
-        renderizarParticipantesHorizontal(room)
 
         // 6. SECCIÓN CHAT DE LA SALA ("Chat de la sala", Badge count, Mensajes, Input)
         val cardChat = LinearLayout(activity).apply {
@@ -917,7 +1243,6 @@ class WatchPartyScreen(private val activity: MainActivity) {
 
         cardChat.addView(rowHeaderChat)
 
-        // Lista scrolleable de mensajes de chat
         val scrollChat = ScrollView(activity).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -936,7 +1261,6 @@ class WatchPartyScreen(private val activity: MainActivity) {
 
         cardChat.addView(scrollChat)
 
-        // Fila de input de mensaje con botón emoji y botón de enviar circular
         val rowInputChat = LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -966,6 +1290,11 @@ class WatchPartyScreen(private val activity: MainActivity) {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginEnd = activity.dp(8)
             }
+            setOnFocusChangeListener { _, hasFocus ->
+                if (hasFocus) {
+                    scrollChatRef?.postDelayed({ scrollChatRef?.fullScroll(View.FOCUS_DOWN) }, 200)
+                }
+            }
         }
         inputChatMessageRef = inputChat
 
@@ -990,11 +1319,6 @@ class WatchPartyScreen(private val activity: MainActivity) {
         rowInputChat.addView(btnSendChat)
 
         cardChat.addView(rowInputChat)
-
-        pantalla.addView(cardChat)
-
-        // Cargar mensajes de chat históricos y suscribir a flujo
-        configurarFlujoChat(room.id)
 
         // 7. BARRA INFERIOR FLOTANTE DE REACCIONES RÁPIDAS Y CONTROLES
         val barQuickReactions = LinearLayout(activity).apply {
@@ -1074,12 +1398,34 @@ class WatchPartyScreen(private val activity: MainActivity) {
             }
         }
 
-        barQuickReactions.addView(btnQuickChat)
-        barQuickReactions.addView(btnQuickEmoji)
-        barQuickReactions.addView(containerEmojiPills)
-        barQuickReactions.addView(btnQuickSettings)
+        safeAddView(barQuickReactions, btnQuickChat)
+        safeAddView(barQuickReactions, btnQuickEmoji)
+        safeAddView(barQuickReactions, containerEmojiPills)
+        safeAddView(barQuickReactions, btnQuickSettings)
 
-        pantalla.addView(barQuickReactions)
+        safeAddView(scrollableColumn, cardMovieInfo)
+        safeAddView(scrollableColumn, cardParticipants)
+        safeAddView(scrollableColumn, cardChat)
+        safeAddView(scrollableColumn, barQuickReactions)
+
+        bottomScroll.addView(scrollableColumn)
+        rootRoomLayout.addView(bottomScroll)
+
+        content.addView(rootRoomLayout)
+
+        viewsToToggleFullscreen.clear()
+        viewsToToggleFullscreen.add(topAppHeader)
+        viewsToToggleFullscreen.add(subHeaderNav)
+        viewsToToggleFullscreen.add(bottomScroll)
+    }
+
+    private fun safeAddView(parent: ViewGroup, child: View, params: ViewGroup.LayoutParams? = null) {
+        (child.parent as? ViewGroup)?.removeView(child)
+        if (params != null) {
+            parent.addView(child, params)
+        } else {
+            parent.addView(child)
+        }
     }
 
     // =========================================================================
@@ -1098,6 +1444,11 @@ class WatchPartyScreen(private val activity: MainActivity) {
                     }
                     override fun onIsPlayingChanged(isPlaying: Boolean) {
                         btnPlayPauseRef?.setImageResource(if (isPlaying) R.drawable.ic_pause_white else R.drawable.ic_play_white)
+                        if (isPlaying) {
+                            programarOcultarControles()
+                        } else {
+                            mostrarControlesPlayer()
+                        }
                     }
                 })
             }
@@ -1142,13 +1493,17 @@ class WatchPartyScreen(private val activity: MainActivity) {
             override fun run() {
                 val player = exoPlayer
                 if (player != null && !isSeeking) {
-                    val pos = player.currentPosition.coerceAtLeast(0L)
-                    val dur = player.duration.coerceAtLeast(1L)
-                    txtCurrentTimeRef?.text = formatearTiempoMs(pos)
-                    txtTotalDurationRef?.text = formatearTiempoMs(dur)
+                    try {
+                        val pos = player.currentPosition.coerceAtLeast(0L)
+                        val dur = player.duration.coerceAtLeast(1L)
+                        txtCurrentTimeRef?.text = formatearTiempoMs(pos)
+                        txtTotalDurationRef?.text = formatearTiempoMs(dur)
 
-                    val progressPercent = ((pos * 100) / dur).toInt()
-                    seekBarRef?.progress = progressPercent
+                        val progressPercent = ((pos * 100) / dur).toInt()
+                        seekBarRef?.progress = progressPercent
+                    } catch (e: Exception) {
+                        // Evitar crash si el reproductor está siendo liberado
+                    }
                 }
                 handler.postDelayed(this, 1000)
             }
@@ -1158,22 +1513,33 @@ class WatchPartyScreen(private val activity: MainActivity) {
     }
 
     private fun actualizarDatosSala(room: WatchPartyRoomState) {
-        // Actualizar contadores
         txtParticipantCountTopBadgeRef?.text = "${room.participants.size}"
         txtParticipantCountHeaderRef?.text = "Participantes (${room.participants.size})"
 
         renderizarParticipantesHorizontal(room)
         actualizarInfoPeliculaCard(room)
+        configurarFlujoChat(room.id)
 
-        // Sincronizar estado de reproducción remoto
         val player = exoPlayer ?: return
+
+        // El anfitrión reproduciendo activamente no debe rebobinar o saltar cuando se une otro usuario
+        if (esHost(room) && player.isPlaying && room.isPlaying) {
+            return
+        }
+
+        val now = System.currentTimeMillis()
+        var targetPos = room.currentPositionMs
+        if (room.isPlaying) {
+            val elapsed = (now - room.serverTime).coerceAtLeast(0L)
+            targetPos += elapsed
+        }
+
         if (room.isPlaying != player.isPlaying) {
             if (room.isPlaying) player.play() else player.pause()
         }
 
         val currentPos = player.currentPosition
-        val targetPos = room.currentPositionMs
-        if (Math.abs(currentPos - targetPos) > 2500) {
+        if (Math.abs(currentPos - targetPos) > 4500) {
             player.seekTo(targetPos)
         }
     }
@@ -1203,7 +1569,6 @@ class WatchPartyScreen(private val activity: MainActivity) {
                 }
             }
 
-            // Frame del avatar circular con badges (Corona de Host e Indicador verde Online)
             val avatarFrame = FrameLayout(activity).apply {
                 layoutParams = LinearLayout.LayoutParams(activity.dp(50), activity.dp(50)).apply {
                     bottomMargin = activity.dp(4)
@@ -1225,7 +1590,6 @@ class WatchPartyScreen(private val activity: MainActivity) {
             }
             avatarFrame.addView(imgAvatar)
 
-            // Badge Corona de Host
             if (isHostP) {
                 val crownBadge = ImageView(activity).apply {
                     setImageResource(R.drawable.ic_crown)
@@ -1236,7 +1600,6 @@ class WatchPartyScreen(private val activity: MainActivity) {
                 avatarFrame.addView(crownBadge)
             }
 
-            // Indicador Punto Verde Online
             val greenDot = View(activity).apply {
                 background = VenusComponents.fondoRedondeado(Color.rgb(0, 230, 118), 5, activity)
                 layoutParams = FrameLayout.LayoutParams(activity.dp(10), activity.dp(10)).apply {
@@ -1318,42 +1681,73 @@ class WatchPartyScreen(private val activity: MainActivity) {
     }
 
     private fun renderizarMensajesChat(messages: List<WatchPartyChatMessage>) {
-        val container = chatMessagesContainerRef ?: return
-        container.removeAllViews()
-
         txtChatUnreadBadgeRef?.text = "${messages.size}"
 
+        val container = chatMessagesContainerRef
+        if (container != null) {
+            renderizarMensajesEnContenedor(container, messages)
+            scrollChatRef?.post { scrollChatRef?.fullScroll(View.FOCUS_DOWN) }
+        }
+
+        val sideContainer = sideChatMessagesContainerRef
+        if (sideContainer != null) {
+            renderizarMensajesEnContenedor(sideContainer, messages)
+            scrollSideChatRef?.post { scrollSideChatRef?.fullScroll(View.FOCUS_DOWN) }
+        }
+    }
+
+    private fun renderizarMensajesEnContenedor(container: LinearLayout, messages: List<WatchPartyChatMessage>) {
+        container.removeAllViews()
+
+        if (messages.isEmpty()) {
+            val emptyTxt = TextView(activity).apply {
+                text = "Sé el primero en comentar en vivo..."
+                textSize = 12f
+                setTextColor(Color.rgb(185, 178, 201))
+                gravity = Gravity.CENTER
+                setPadding(activity.dp(12), activity.dp(20), activity.dp(12), activity.dp(20))
+            }
+            container.addView(emptyTxt)
+            return
+        }
+
         val currentUserId = WatchPartyDialogs.obtenerIdUsuarioActual(activity)
+        val isSideContainer = container == sideChatMessagesContainerRef
 
         messages.forEach { msg ->
             val isMyMsg = msg.userId == currentUserId
 
             val msgRow = LinearLayout(activity).apply {
                 orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, activity.dp(3), 0, activity.dp(3))
+                gravity = if (isMyMsg) Gravity.END or Gravity.TOP else Gravity.START or Gravity.TOP
+                setPadding(0, activity.dp(2), 0, activity.dp(2))
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
                 )
             }
 
+            val avatarSize = if (isSideContainer) 20 else 28
+            val bubblePaddingH = if (isSideContainer) 8 else 12
+            val bubblePaddingV = if (isSideContainer) 5 else 8
+            val bodyTextSize = if (isSideContainer) 11f else 13f
+
             val imgAvatarMsg = ImageView(activity).apply {
                 setImageResource(R.drawable.ic_user)
                 setColorFilter(Color.rgb(196, 181, 253))
-                setPadding(activity.dp(4), activity.dp(4), activity.dp(4), activity.dp(4))
-                background = VenusComponents.fondoRedondeado(activity.superficie2, 14, activity)
-                layoutParams = LinearLayout.LayoutParams(activity.dp(28), activity.dp(28)).apply {
-                    marginEnd = activity.dp(8)
+                setPadding(activity.dp(3), activity.dp(3), activity.dp(3), activity.dp(3))
+                background = VenusComponents.fondoRedondeado(activity.superficie2, avatarSize / 2, activity)
+                layoutParams = LinearLayout.LayoutParams(activity.dp(avatarSize), activity.dp(avatarSize)).apply {
+                    if (isMyMsg) marginStart = activity.dp(4) else marginEnd = activity.dp(4)
                 }
             }
 
             val bubbleContainer = LinearLayout(activity).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(activity.dp(10), activity.dp(6), activity.dp(10), activity.dp(6))
+                setPadding(activity.dp(bubblePaddingH), activity.dp(bubblePaddingV), activity.dp(bubblePaddingH), activity.dp(bubblePaddingV))
                 background = VenusComponents.fondoRedondeado(
-                    if (isMyMsg) Color.rgb(45, 30, 70) else Color.rgb(27, 24, 35),
-                    12, activity
+                    if (isMyMsg) Color.rgb(115, 45, 210) else Color.rgb(32, 27, 45),
+                    10, activity
                 )
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -1363,13 +1757,26 @@ class WatchPartyScreen(private val activity: MainActivity) {
 
             val timeStr = if (msg.createdAt.isNotBlank()) {
                 try {
-                    val formatted = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
-                    formatted
-                } catch (_: Exception) { "10:24 PM" }
-            } else "10:24 PM"
+                    val sdfIso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+                        timeZone = java.util.TimeZone.getTimeZone("UTC")
+                    }
+                    val date = sdfIso.parse(msg.createdAt)
+                    if (date != null) SimpleDateFormat("h:mm a", Locale.getDefault()).format(date) else "10:24 PM"
+                } catch (_: Exception) {
+                    try {
+                        val sdfIsoShort = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
+                            timeZone = java.util.TimeZone.getTimeZone("UTC")
+                        }
+                        val date = sdfIsoShort.parse(msg.createdAt)
+                        if (date != null) SimpleDateFormat("h:mm a", Locale.getDefault()).format(date) else "10:24 PM"
+                    } catch (_: Exception) { "10:24 PM" }
+                }
+            } else {
+                SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
+            }
 
             val txtSender = TextView(activity).apply {
-                text = "${msg.name}  $timeStr"
+                text = "${msg.name} • $timeStr"
                 textSize = 10f
                 setTextColor(if (msg.isHost) Color.rgb(255, 215, 0) else Color.rgb(196, 181, 253))
                 setTypeface(null, Typeface.BOLD)
@@ -1377,20 +1784,229 @@ class WatchPartyScreen(private val activity: MainActivity) {
 
             val txtBody = TextView(activity).apply {
                 text = msg.message
-                textSize = 13f
+                textSize = bodyTextSize
                 setTextColor(Color.WHITE)
             }
 
             bubbleContainer.addView(txtSender)
             bubbleContainer.addView(txtBody)
 
-            msgRow.addView(imgAvatarMsg)
-            msgRow.addView(bubbleContainer)
+            if (isMyMsg) {
+                msgRow.addView(bubbleContainer)
+                msgRow.addView(imgAvatarMsg)
+            } else {
+                msgRow.addView(imgAvatarMsg)
+                msgRow.addView(bubbleContainer)
+            }
 
             container.addView(msgRow)
         }
+    }
 
-        scrollChatRef?.post { scrollChatRef?.fullScroll(View.FOCUS_DOWN) }
+    private fun actualizarLayoutSegunChatVisibilidad() {
+        val playerAndChatRow = playerAndChatRowRef ?: return
+        val videoContainer = videoContainerFrame ?: return
+        val sidePanel = sideChatPanelRef ?: return
+
+        // Transición de animación suave al cambiar estado de chat lateral
+        androidx.transition.TransitionManager.beginDelayedTransition(
+            playerAndChatRow,
+            androidx.transition.AutoTransition().apply {
+                duration = 250
+            }
+        )
+
+        if (!isFullscreenMode) {
+            playerAndChatRow.layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                activity.dp(210)
+            ).apply {
+                bottomMargin = activity.dp(14)
+            }
+            sidePanel.visibility = View.GONE
+            videoContainer.layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.MATCH_PARENT
+            )
+            playerViewRef?.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+            return
+        }
+
+        playerAndChatRow.layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.MATCH_PARENT
+        )
+
+        if (isSideChatVisibleInLandscape) {
+            sidePanel.visibility = View.VISIBLE
+            sidePanel.layoutParams = LinearLayout.LayoutParams(
+                activity.dp(160),
+                LinearLayout.LayoutParams.MATCH_PARENT
+            ).apply {
+                topMargin = activity.dp(20)
+                bottomMargin = activity.dp(16)
+                marginStart = activity.dp(6)
+                marginEnd = activity.dp(12)
+            }
+            videoContainer.layoutParams = LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                1f
+            ).apply {
+                gravity = Gravity.CENTER
+                topMargin = activity.dp(20)
+                bottomMargin = activity.dp(16)
+                marginStart = activity.dp(12)
+                marginEnd = activity.dp(6)
+            }
+            playerViewRef?.resizeMode = currentResizeMode
+        } else {
+            sidePanel.visibility = View.GONE
+            videoContainer.layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.MATCH_PARENT
+            ).apply {
+                gravity = Gravity.CENTER
+                topMargin = 0
+                bottomMargin = 0
+                marginStart = 0
+                marginEnd = 0
+            }
+            playerViewRef?.resizeMode = currentResizeMode
+        }
+    }
+
+    private fun togglePantallaCompleta() {
+        val playerAndChatRow = playerAndChatRowRef ?: return
+        val rootLayout = rootRoomLayoutRef ?: return
+        isFullscreenMode = !isFullscreenMode
+
+        if (isFullscreenMode) {
+            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            activity.mostrarBottomNav(false)
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                activity.window.insetsController?.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
+                activity.window.insetsController?.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            } else {
+                @Suppress("DEPRECATION")
+                activity.window.decorView.systemUiVisibility = (
+                    View.SYSTEM_UI_FLAG_FULLSCREEN
+                    or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                )
+            }
+
+            rootLayout.setPadding(0, 0, 0, 0)
+            btnSideChatToggleRef?.visibility = View.VISIBLE
+            actualizarLayoutSegunChatVisibilidad()
+
+            viewsToToggleFullscreen.forEach { it.visibility = View.GONE }
+            btnFullscreenToggleRef?.setImageResource(R.drawable.ic_fullscreen_exit_white)
+        } else {
+            restaurarBarrasSistema()
+
+            rootLayout.setPadding(activity.dp(20), activity.dp(16), activity.dp(20), activity.dp(8))
+            btnSideChatToggleRef?.visibility = View.GONE
+            sideChatPanelRef?.visibility = View.GONE
+            actualizarLayoutSegunChatVisibilidad()
+
+            viewsToToggleFullscreen.forEach { it.visibility = View.VISIBLE }
+            btnFullscreenToggleRef?.setImageResource(R.drawable.ic_fullscreen_white)
+        }
+    }
+
+    private fun restaurarBarrasSistema() {
+        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        activity.mostrarBottomNav(true)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            activity.window.insetsController?.show(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
+        } else {
+            @Suppress("DEPRECATION")
+            activity.window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
+        }
+    }
+
+    private fun programarOcultarControles() {
+        handler.removeCallbacks(hideControlsRunnable)
+        if (exoPlayer?.isPlaying == true) {
+            handler.postDelayed(hideControlsRunnable, 3000)
+        }
+    }
+
+    private fun ocultarControlesPlayer() {
+        val controls = controlsOverlayRef ?: return
+        val bottomBar = playerBottomBarRef ?: return
+        if (!isControlsVisible) return
+
+        isControlsVisible = false
+        controls.animate()
+            .alpha(0f)
+            .setDuration(250)
+            .withEndAction { controls.visibility = View.GONE }
+            .start()
+
+        bottomBar.animate()
+            .alpha(0f)
+            .setDuration(250)
+            .withEndAction { bottomBar.visibility = View.GONE }
+            .start()
+    }
+
+    private fun mostrarControlesPlayer() {
+        val controls = controlsOverlayRef ?: return
+        val bottomBar = playerBottomBarRef ?: return
+
+        isControlsVisible = true
+        controls.visibility = View.VISIBLE
+        controls.animate().alpha(1f).setDuration(200).start()
+
+        bottomBar.visibility = View.VISIBLE
+        bottomBar.animate().alpha(1f).setDuration(200).start()
+
+        programarOcultarControles()
+    }
+
+    private fun alternarVisibilidadControles() {
+        if (isControlsVisible) {
+            handler.removeCallbacks(hideControlsRunnable)
+            ocultarControlesPlayer()
+        } else {
+            mostrarControlesPlayer()
+        }
+    }
+
+    private fun animarEfectoDoubleTap(container: FrameLayout, texto: String, isLeft: Boolean) {
+        val txtEffect = TextView(activity).apply {
+            text = texto
+            textSize = 20f
+            setTextColor(Color.WHITE)
+            setTypeface(null, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            setPadding(activity.dp(16), activity.dp(10), activity.dp(16), activity.dp(10))
+            background = VenusComponents.fondoRedondeado(Color.argb(180, 135, 56, 245), 20, activity)
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.CENTER_VERTICAL or (if (isLeft) Gravity.START else Gravity.END)
+                if (isLeft) marginStart = activity.dp(40) else marginEnd = activity.dp(40)
+            }
+        }
+
+        container.addView(txtEffect)
+
+        txtEffect.animate()
+            .alpha(0f)
+            .scaleX(1.3f)
+            .scaleY(1.3f)
+            .setDuration(600)
+            .setListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    container.removeView(txtEffect)
+                }
+            })
+            .start()
     }
 
     private fun enviarReaccionRapida(emoji: String) {
@@ -1426,29 +2042,6 @@ class WatchPartyScreen(private val activity: MainActivity) {
                 }
             })
             .start()
-    }
-
-    private fun abrirPantallaCompleta(room: WatchPartyRoomState) {
-        val mediaItem = cachedLibraryItems.find { it.id == room.mediaId }
-        val peliculaMatch = activity.catalogosMock.find { it.id == mediaItem?.tmdbId || it.id == room.mediaId }
-
-        val token = activity.repository.getToken() ?: ""
-        val streamUrl = when {
-            !room.mediaId.isNullOrBlank() -> "${ApiClient.getBaseUrl(activity)}media/${room.mediaId}/stream?token=$token"
-            peliculaMatch != null && peliculaMatch.videoUrl.isNotBlank() -> peliculaMatch.videoUrl
-            else -> ""
-        }
-
-        val title = room.mediaTitle ?: peliculaMatch?.titulo ?: "Watch Party"
-        val pos = exoPlayer?.currentPosition ?: 0L
-
-        val intent = Intent(activity, VideoPlayerActivity::class.java).apply {
-            putExtra("VIDEO_URI", streamUrl)
-            putExtra("VIDEO_TITLE", title)
-            putExtra("VIDEO_POSITION", pos)
-            putExtra("MEDIA_ID", room.mediaId ?: "")
-        }
-        activity.startActivity(intent)
     }
 
     private fun esHost(room: WatchPartyRoomState): Boolean {
@@ -1489,11 +2082,28 @@ class WatchPartyScreen(private val activity: MainActivity) {
         }
     }
 
-    private fun liberarPlayer() {
+    fun pausarPlayer() {
+        try {
+            exoPlayer?.pause()
+        } catch (e: Exception) {
+            android.util.Log.e("WatchParty", "Error al pausar player", e)
+        }
+    }
+
+    fun liberarPlayer() {
+        if (isFullscreenMode) {
+            restaurarBarrasSistema()
+            isFullscreenMode = false
+        }
         updateProgressRunnable?.let { handler.removeCallbacks(it) }
         updateProgressRunnable = null
-        exoPlayer?.stop()
-        exoPlayer?.release()
+        try {
+            playerViewRef?.player = null
+            exoPlayer?.stop()
+            exoPlayer?.release()
+        } catch (e: Exception) {
+            android.util.Log.e("WatchParty", "Error al liberar player", e)
+        }
         exoPlayer = null
         currentLoadedStreamUrl = null
     }

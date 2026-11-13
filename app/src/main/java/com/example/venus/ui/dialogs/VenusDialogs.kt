@@ -242,8 +242,11 @@ object VenusDialogs {
     }
 
     fun mostrarDialogoVinculacion(activity: MainActivity) {
-        val inputCodigo = EditText(activity).apply {
-            hint = "Ingresa el PIN de tu PC (ej: 8842)"
+        val currentUrl = com.example.venus.network.ApiClient.getBaseUrl(activity)
+
+        val inputUrl = EditText(activity).apply {
+            hint = "http://192.168.1.15:5000 o https://tu-tunel.trycloudflare.com"
+            setText(currentUrl.replace("/api/", ""))
             setHintTextColor(activity.gris)
             setTextColor(activity.blanco)
             textSize = 14f
@@ -253,15 +256,18 @@ object VenusDialogs {
         }
 
         AlertDialog.Builder(activity)
-            .setTitle("Vinculación con PC VENUS")
-            .setMessage("Abre la aplicación VENUS Server en tu computadora e ingresa el código PIN mostrado en pantalla:")
-            .setView(inputCodigo)
+            .setTitle("Vincular Servidor VENUS")
+            .setMessage("Ingresa la IP local de tu PC (ej: http://192.168.1.15:5000) o tu URL pública de Cloudflare Tunnel:")
+            .setView(inputUrl)
             .setNegativeButton("Cancelar", null)
-            .setPositiveButton("VINCULAR") { _, _ ->
-                val pin = inputCodigo.text.toString().ifBlank { "8842" }
-                activity.almacen.guardarServidorConectado("PC-VENUS-SERVER", "192.168.1.105:8080 (PIN: $pin)")
-                Toast.makeText(activity, "¡Servidor PC vinculado con éxito!", Toast.LENGTH_LONG).show()
-                activity.mostrarConexion()
+            .setPositiveButton("CONECTAR") { _, _ ->
+                val newUrl = inputUrl.text.toString().trim()
+                if (newUrl.isNotBlank()) {
+                    com.example.venus.network.ApiClient.setBaseUrl(activity, newUrl)
+                    activity.almacen.guardarServidorConectado("Servidor VENUS", newUrl)
+                    Toast.makeText(activity, "¡Servidor actualizado correctamente!", Toast.LENGTH_LONG).show()
+                    activity.mostrarConexion()
+                }
             }
             .show()
     }

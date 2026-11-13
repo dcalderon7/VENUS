@@ -79,7 +79,7 @@ class VenusRepository(context: Context) {
 
     private fun parseError(e: Exception): String {
         return if (e is java.net.ConnectException || e is java.net.UnknownHostException || e is java.net.SocketTimeoutException) {
-            "No se pudo conectar al servidor backend (http://10.0.2.2:5000). Verifique que Node.js y PostgreSQL estén en ejecución."
+            "No se pudo conectar con el servidor de VENUS. Verifique su conexión a internet e intente de nuevo."
         } else {
             e.message ?: "Error de red desconocido"
         }

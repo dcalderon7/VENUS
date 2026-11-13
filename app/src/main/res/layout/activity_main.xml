@@ -103,6 +103,7 @@
 
     <!-- Navegación inferior estilizada (Inicio, Watch Party, Mi Lista, Biblioteca) -->
     <LinearLayout
+        android:id="@+id/bottomNavLayout"
         android:layout_width="match_parent"
         android:layout_height="68dp"
         android:gravity="center"

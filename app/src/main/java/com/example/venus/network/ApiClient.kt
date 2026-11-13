@@ -8,20 +8,18 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 object ApiClient {
-    private const val DEFAULT_BASE_URL = "http://192.168.1.9:5000/api/"
+    private const val DEFAULT_BACKEND_URL = "https://onion-defend-adapted-until.trycloudflare.com/api/"
 
     fun getBaseUrl(context: Context): String {
         val prefs = context.applicationContext.getSharedPreferences("venus_secure_prefs", Context.MODE_PRIVATE)
         val savedUrl = prefs.getString("server_base_url", null)
-        val isInvalidUrl = savedUrl.isNullOrBlank() ||
-            savedUrl.contains("workers.dev") ||
-            savedUrl.contains("trycloudflare") ||
-            savedUrl.contains("10.0.2.2") ||
-            savedUrl.contains("localhost")
 
-        if (isInvalidUrl) {
-            prefs.edit().putString("server_base_url", DEFAULT_BASE_URL).apply()
-            return DEFAULT_BASE_URL
+        // Si no hay URL guardada o apunta al Worker de estaticos (workers.dev que no ejecuta Socket.IO), migrar al backend real de Express+Socket.IO
+        val isInvalidWorkerUrl = savedUrl.isNullOrBlank() || savedUrl.contains("workers.dev")
+
+        if (isInvalidWorkerUrl) {
+            prefs.edit().putString("server_base_url", DEFAULT_BACKEND_URL).apply()
+            return DEFAULT_BACKEND_URL
         }
 
         var formatted = if (!savedUrl.endsWith("/")) "$savedUrl/" else savedUrl
@@ -34,6 +32,8 @@ object ApiClient {
     fun setBaseUrl(context: Context, url: String) {
         val prefs = context.applicationContext.getSharedPreferences("venus_secure_prefs", Context.MODE_PRIVATE)
         var cleanUrl = url.trim()
+        if (cleanUrl.isBlank()) return
+
         if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
             cleanUrl = "http://$cleanUrl"
         }
@@ -44,7 +44,7 @@ object ApiClient {
             cleanUrl = "${cleanUrl}api/"
         }
         prefs.edit().putString("server_base_url", cleanUrl).apply()
-        retrofit = null // reset instance
+        retrofit = null
     }
 
     private var retrofit: Retrofit? = null

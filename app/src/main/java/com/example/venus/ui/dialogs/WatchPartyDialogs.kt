@@ -119,6 +119,11 @@ object WatchPartyDialogs {
             txtCode.text = "Generando código..."
             btnRetry.visibility = View.GONE
 
+            val activeRoom = wsManager.currentRoomState.value
+            if (activeRoom != null && activeRoom.status == "active" && activeRoom.roomCode.isNotBlank()) {
+                txtCode.text = activeRoom.roomCode
+            }
+
             wsManager.connect()
             wsManager.createRoom(
                 mediaId = mediaId,
@@ -130,9 +135,15 @@ object WatchPartyDialogs {
                 },
                 onError = { errMsg ->
                     (context as? android.app.Activity)?.runOnUiThread {
-                        txtCode.text = "Error al generar código"
-                        btnRetry.visibility = View.VISIBLE
-                        Toast.makeText(context, "Error: $errMsg", Toast.LENGTH_LONG).show()
+                        val currentRoomState = wsManager.currentRoomState.value
+                        if (currentRoomState != null && currentRoomState.status == "active" && currentRoomState.roomCode.isNotBlank()) {
+                            txtCode.text = currentRoomState.roomCode
+                            btnRetry.visibility = View.GONE
+                        } else {
+                            txtCode.text = "Error al generar código"
+                            btnRetry.visibility = View.VISIBLE
+                            Toast.makeText(context, "Error: $errMsg", Toast.LENGTH_LONG).show()
+                        }
                     }
                 }
             )
@@ -547,12 +558,15 @@ object WatchPartyDialogs {
             }
             isClickable = true
             setOnClickListener {
-                val code = input.text.toString().trim().uppercase()
-                if (code.isNotBlank()) {
+                val codeInput = input.text.toString().trim().uppercase()
+                if (codeInput.isNotBlank()) {
                     bottomSheet.dismiss()
+                    val cleanCode = if (!codeInput.startsWith("VP-")) "VP-$codeInput" else codeInput
                     val wsManager = VenusWebSocketManager.getInstance(context)
-                    wsManager.joinRoom(code)
-                    Toast.makeText(context, "Conectando a la sala $code...", Toast.LENGTH_SHORT).show()
+                    wsManager.connect()
+                    wsManager.joinRoom(cleanCode)
+                    Toast.makeText(context, "Conectando a la sala $cleanCode...", Toast.LENGTH_SHORT).show()
+                    (context as? com.example.venus.MainActivity)?.mostrarWatchPartyScreen()
                 }
             }
         }
